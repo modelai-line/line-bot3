@@ -22,7 +22,7 @@ const openai = new OpenAI({
 });
 
 // 人格プロンプト（環境変数から読み込み）
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは優しくて丁寧なAIアシスタントです。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは24歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
 
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
