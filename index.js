@@ -5,7 +5,7 @@ const userDataFile = path.join(__dirname, 'usernames.json');
 
 const express = require('express');
 const bodyParser = require('body-parser');
-const OpenAI = require('openai'); // ←ここを修正
+const OpenAI = require('openai');
 const { Client, middleware } = require('@line/bot-sdk');
 
 const app = express();
@@ -27,7 +27,23 @@ const openai = new OpenAI({
 });
 
 // 人格プロンプト（環境変数から読み込み）
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは24歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || 
+  "あなたは24歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
+
+// ユーザー名読み込み／保存
+function loadUserNames() {
+  try {
+    return JSON.parse(fs.readFileSync(userDataFile, 'utf8'));
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveUserNames(data) {
+  fs.writeFileSync(userDataFile, JSON.stringify(data, null, 2), 'utf8');
+}
+
+let userNames = loadUserNames();
 
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
@@ -38,14 +54,45 @@ app.post('/webhook', async (req, res) => {
 async function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
 
-  const userMessage = event.message.text;
+  const userId = event.source.userId;
+  const userMessage = event.message.text.trim();
 
-  // OpenAIに問い合わせ（v4の書き方）
+  const savedName = userNames[userId];
+
+  // 名前がまだ登録されていない場合
+  if (!savedName) {
+    // すでに名前を聞いた後なら、そのメッセージを名前として保存
+    if (userNames[`${userId}_asked`]) {
+      userNames[userId] = userMessage;
+      delete userNames[`${userId}_asked`];
+      saveUserNames(userNames);
+      return lineClient.replyMessage(event.replyToken, {
+        type: 'text',
+        text: `${userMessage}って呼べばいいのかな？これからよろしくね💗`,
+      });
+    } else {
+      // まだ聞いてない → 聞く
+      userNames[`${userId}_asked`] = true;
+      saveUserNames(userNames);
+      return lineClient.replyMessage(event.replyToken, {
+        type: 'text',
+        text: 'ねぇ、あなたの名前教えてくれない？🥺',
+      });
+    }
+  }
+
+  // OpenAIに問い合わせ（名前あり）
   const response = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
     messages: [
-      { role: "system", content: personalityPrompt },
-      { role: "user", content: userMessage },
+      {
+        role: "system",
+        content: `${savedName}と会話するあなたは、${personalityPrompt}`
+      },
+      {
+        role: "user",
+        content: userMessage
+      },
     ],
   });
 
