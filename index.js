@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { Configuration, OpenAIApi } = require('openai');
+const OpenAI = require('openai'); // ←ここを修正
 const { Client, middleware } = require('@line/bot-sdk');
 
 const app = express();
@@ -16,10 +16,10 @@ const lineClient = new Client(lineConfig);
 app.use(middleware(lineConfig));
 app.use(bodyParser.json());
 
-// OpenAI設定
-const openai = new OpenAIApi(new Configuration({
+// OpenAI設定（v4対応）
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-}));
+});
 
 // 人格プロンプト（環境変数から読み込み）
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは優しくて丁寧なAIアシスタントです。";
@@ -35,8 +35,8 @@ async function handleEvent(event) {
 
   const userMessage = event.message.text;
 
-  // OpenAIに問い合わせ
-  const response = await openai.createChatCompletion({
+  // OpenAIに問い合わせ（v4の書き方）
+  const response = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: personalityPrompt },
@@ -44,7 +44,7 @@ async function handleEvent(event) {
     ],
   });
 
-  const replyText = response.data.choices[0].message.content.trim();
+  const replyText = response.choices[0].message.content.trim();
 
   return lineClient.replyMessage(event.replyToken, {
     type: 'text',
