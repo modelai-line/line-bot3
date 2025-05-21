@@ -1,3 +1,8 @@
+// ユーザーの名前を保存
+const fs = require('fs');
+const path = require('path');
+const userDataFile = path.join(__dirname, 'usernames.json');
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const OpenAI = require('openai'); // ←ここを修正
