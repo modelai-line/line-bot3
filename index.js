@@ -26,7 +26,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 人格プロンプト（環境変数から読み込み）
+// 人格プロンプト（環境変数から読み込み）この部分は保険　実際はRenderの環境変数に設定済
 const personalityPrompt = process.env.PERSONALITY_PROMPT || 
   "あなたは24歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
 
@@ -76,7 +76,7 @@ async function handleEvent(event) {
       saveUserNames(userNames);
       return lineClient.replyMessage(event.replyToken, {
         type: 'text',
-        text: 'ねぇ、あなたの名前教えてくれない？🥺',
+        text: 'ねぇ、あなたのこと何て呼んだらいい？呼んでほしい名前送って。',
       });
     }
   }
