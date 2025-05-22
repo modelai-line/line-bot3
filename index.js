@@ -1,12 +1,8 @@
-// ユーザーの名前を保存
-const fs = require('fs');
-const path = require('path');
-const userDataFile = path.join(__dirname, 'usernames.json');
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const OpenAI = require('openai');
 const { Client, middleware } = require('@line/bot-sdk');
+const { saveUserName, saveMessage } = require('./saveUserData'); // 追加
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -26,11 +22,15 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 人格プロンプト（環境変数から読み込み）この部分は保険　実際はRenderの環境変数に設定済
+// 人格プロンプト（環境変数から読み込み）
 const personalityPrompt = process.env.PERSONALITY_PROMPT || 
   "あなたは24歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
 
-// ユーザー名読み込み／保存
+// 既存のユーザー名保存は残すけどSupabaseも使うため、両方対応
+const fs = require('fs');
+const path = require('path');
+const userDataFile = path.join(__dirname, 'usernames.json');
+
 function loadUserNames() {
   try {
     return JSON.parse(fs.readFileSync(userDataFile, 'utf8'));
@@ -59,19 +59,20 @@ async function handleEvent(event) {
 
   const savedName = userNames[userId];
 
-  // 名前がまだ登録されていない場合
   if (!savedName) {
-    // すでに名前を聞いた後なら、そのメッセージを名前として保存
     if (userNames[`${userId}_asked`]) {
       userNames[userId] = userMessage;
       delete userNames[`${userId}_asked`];
       saveUserNames(userNames);
+
+      // Supabaseにユーザー名保存
+      await saveUserName(userId, userMessage);
+
       return lineClient.replyMessage(event.replyToken, {
         type: 'text',
         text: `${userMessage}って呼べばいいのかな？これからよろしくね💗`,
       });
     } else {
-      // まだ聞いてない → 聞く
       userNames[`${userId}_asked`] = true;
       saveUserNames(userNames);
       return lineClient.replyMessage(event.replyToken, {
@@ -80,6 +81,9 @@ async function handleEvent(event) {
       });
     }
   }
+
+  // ユーザーメッセージをSupabaseに保存
+  await saveMessage(userId, 'user', userMessage);
 
   // OpenAIに問い合わせ（名前あり）
   const response = await openai.chat.completions.create({
@@ -97,6 +101,9 @@ async function handleEvent(event) {
   });
 
   const replyText = response.choices[0].message.content.trim();
+
+  // Botの返信もSupabaseに保存
+  await saveMessage(userId, 'bot', replyText);
 
   return lineClient.replyMessage(event.replyToken, {
     type: 'text',
