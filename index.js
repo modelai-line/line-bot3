@@ -2,7 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const OpenAI = require('openai');
 const { Client, middleware } = require('@line/bot-sdk');
-const { saveUserName, saveMessage } = require('./saveUserData'); // 追加
+const { saveUserName, saveMessage, getRecentMessages } = require('./saveUserData'); // 追加
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -82,27 +82,28 @@ async function handleEvent(event) {
     }
   }
 
-  // ユーザーメッセージをSupabaseに保存
-  await saveMessage(userId, 'user', userMessage);
+  // 過去の会話履歴を取得（最新5件）
+  const history = await getRecentMessages(userId, 5);
 
-  // OpenAIに問い合わせ（名前あり）
+  const messages = [
+    { role: "system", content: `${savedName}と会話するあなたは、${personalityPrompt}` },
+    ...history.flatMap(msg => [
+      { role: "user", content: msg.user_message },
+      { role: "assistant", content: msg.bot_response }
+    ]),
+    { role: "user", content: userMessage }
+  ];
+
+  // OpenAIに問い合わせ（文脈あり）
   const response = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
-    messages: [
-      {
-        role: "system",
-        content: `${savedName}と会話するあなたは、${personalityPrompt}`
-      },
-      {
-        role: "user",
-        content: userMessage
-      },
-    ],
+    messages,
   });
 
   const replyText = response.choices[0].message.content.trim();
 
-  // Botの返信もSupabaseに保存
+  // Supabaseにユーザー発言とBot返信を保存
+  await saveMessage(userId, 'user', userMessage);
   await saveMessage(userId, 'bot', replyText);
 
   return lineClient.replyMessage(event.replyToken, {
