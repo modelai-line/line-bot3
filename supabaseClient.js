@@ -6,43 +6,49 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// ユーザー名の保存
 async function saveUserName(userId, name) {
   const { error } = await supabase
     .from('user_profiles')
-    .upsert({ user_id: userId, name: name });
-
-  if (error) {
-    console.error('Error saving user name:', error);
-  }
+    .upsert([{ user_id: userId, name }]);
+  if (error) console.error('Error saving user name:', error);
 }
 
-// メッセージの保存
 async function saveMessage(userId, role, content) {
   const { error } = await supabase
-    .from('chat_messages')
+    .from('messages')  // ここを 'messages' に統一
     .insert([{ user_id: userId, role, content }]);
-
-  if (error) {
-    console.error('Error saving message:', error);
-  }
+  if (error) console.error('Error saving message:', error);
 }
 
-// 直近のメッセージ履歴を取得（最大 limit 件）
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
-    .from('chat_messages')
-    .select('role, content')
+    .from('messages')  // ここも 'messages'
+    .select('role, content, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(limit * 2);
 
   if (error) {
     console.error('Error fetching recent messages:', error);
     return [];
   }
 
-  return data.reverse(); // 時系列順に並べ替えて返す
+  // 古い順に並び替え
+  const reversed = data.reverse();
+  const pairs = [];
+
+  // userメッセージとbotメッセージのペアを作成
+  for (let i = 0; i < reversed.length - 1; i++) {
+    if (reversed[i].role === 'user' && reversed[i + 1].role === 'bot') {
+      pairs.push({
+        user_message: reversed[i].content,
+        bot_response: reversed[i + 1].content,
+      });
+      i++; // botメッセージはスキップ
+    }
+  }
+
+  return pairs;
 }
 
 module.exports = {
