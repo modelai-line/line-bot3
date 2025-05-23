@@ -3,6 +3,10 @@ const { createClient } = require('@supabase/supabase-js');
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables');
+}
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function saveUserName(userId, name) {
@@ -27,7 +31,6 @@ async function getRecentMessages(userId, limit = 5) {
     .select('role, content, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    // メッセージとレスポンスのペアを最大 `limit` 個取得するため、2倍の件数を取得
     .limit(limit * 2);
 
   if (error) {
