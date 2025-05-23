@@ -1,4 +1,3 @@
-// supabaseClient.js
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -9,35 +8,36 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 async function saveUserName(userId, name) {
   const { error } = await supabase
     .from('user_profiles')
-    .upsert([{ user_id: userId, name }]);
-  if (error) console.error('Error saving user name:', error);
+    .upsert([{ user_id: userId, name }], { onConflict: ['user_id'] });
+
+  if (error) console.error(`Error saving user name for ${userId}:`, error);
 }
 
 async function saveMessage(userId, role, content) {
   const { error } = await supabase
-    .from('messages')  // ここを 'messages' に統一
+    .from('messages')
     .insert([{ user_id: userId, role, content }]);
-  if (error) console.error('Error saving message:', error);
+
+  if (error) console.error(`Error saving message for ${userId}:`, error);
 }
 
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
-    .from('messages')  // ここも 'messages'
+    .from('messages')
     .select('role, content, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
+    // メッセージとレスポンスのペアを最大 `limit` 個取得するため、2倍の件数を取得
     .limit(limit * 2);
 
   if (error) {
-    console.error('Error fetching recent messages:', error);
+    console.error(`Error fetching recent messages for ${userId}:`, error);
     return [];
   }
 
-  // 古い順に並び替え
   const reversed = data.reverse();
   const pairs = [];
 
-  // userメッセージとbotメッセージのペアを作成
   for (let i = 0; i < reversed.length - 1; i++) {
     if (reversed[i].role === 'user' && reversed[i + 1].role === 'bot') {
       pairs.push({
