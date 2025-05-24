@@ -5,7 +5,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const personalityPrompt = process.env.PERSONALITY_PROMPT || 
-  "あなたは21歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
+  "あなたは24歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
 
 // 会話履歴取得（直近20件、昇順に並べ替え）
 async function getRecentMessages(userId, limit = 20) {
