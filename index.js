@@ -1,81 +1,111 @@
-import 'dotenv/config';  // .envの内容を環境変数にセット
-import express from 'express';
-import { middleware, Client } from '@line/bot-sdk';
-import { Configuration, OpenAIApi } from 'openai';
+// ユーザーの名前を保存
+const fs = require('fs');
+const path = require('path');
+const userDataFile = path.join(__dirname, 'usernames.json');
+
+const express = require('express');
+const bodyParser = require('body-parser');
+const OpenAI = require('openai');
+const { Client, middleware } = require('@line/bot-sdk');
 
 const app = express();
+const port = process.env.PORT || 3000;
 
-const config = {
-  channelSecret: process.env.CHANNEL_SECRET,
+// LINE設定
+const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET,
 };
 
-// 環境変数が設定されているか確認
-if (!config.channelSecret || !config.channelAccessToken) {
-  throw new Error('CHANNEL_SECRET or CHANNEL_ACCESS_TOKEN is missing in environment variables');
-}
+const lineClient = new Client(lineConfig);
+app.use(middleware(lineConfig));
+app.use(bodyParser.json());
 
-// OpenAI設定
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY is missing in environment variables');
-}
-
-const openaiConfig = new Configuration({
+// OpenAI設定（v4対応）
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(openaiConfig);
 
-// 人格プロンプト（環境変数がなければデフォルトを使う）
+// 人格プロンプト（環境変数から読み込み）
 const personalityPrompt = process.env.PERSONALITY_PROMPT || 
-  'あなたは女性で癒し系の優しい人格を持つAIアシスタントです。優しく丁寧に返答してください。';
+  "あなたは24歳の女性「みなみ」。口調はゆるくて、ため口で話す。相手を癒すような、やさしく包み込む雰囲気を大事にして。語尾に「〜ね」「〜よ」「〜かな？」などをつけることが多く、敬語は使わず、少し甘えたような話し方をする。";
 
-// LINE SDKのmiddlewareを使う
-app.use(middleware(config));
-
-// LINEクライアントのインスタンス生成
-const client = new Client(config);
-
-// Webhookイベント処理
-app.post('/webhook', express.json(), async (req, res) => {
-  const events = req.body.events;
-
+// ユーザー名読み込み／保存
+function loadUserNames() {
   try {
-    await Promise.all(events.map(async (event) => {
-      if (event.type === 'message' && event.message.type === 'text') {
-        const userMessage = event.message.text;
-
-        // OpenAIに送る会話履歴を作成（人格プロンプト＋ユーザーメッセージ）
-        const messages = [
-          { role: 'system', content: personalityPrompt },
-          { role: 'user', content: userMessage },
-        ];
-
-        // Chat Completion APIを呼び出し
-        const completion = await openai.createChatCompletion({
-          model: 'gpt-4o-mini',
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: 1000,
-        });
-
-        const replyText = completion.data.choices[0].message.content;
-
-        // LINEに返信
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: replyText,
-        });
-      }
-    }));
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Error');
+    return JSON.parse(fs.readFileSync(userDataFile, 'utf8'));
+  } catch (e) {
+    return {};
   }
+}
+
+function saveUserNames(data) {
+  fs.writeFileSync(userDataFile, JSON.stringify(data, null, 2), 'utf8');
+}
+
+let userNames = loadUserNames();
+
+app.post('/webhook', async (req, res) => {
+  const events = req.body.events;
+  const results = await Promise.all(events.map(handleEvent));
+  res.json(results);
 });
 
-// ポート設定（Renderの環境変数PORTを使う）
-const port = process.env.PORT || 3000;
+async function handleEvent(event) {
+  if (event.type !== 'message' || event.message.type !== 'text') return;
+
+  const userId = event.source.userId;
+  const userMessage = event.message.text.trim();
+
+  const savedName = userNames[userId];
+
+  // 名前がまだ登録されていない場合
+  if (!savedName) {
+    // すでに名前を聞いた後なら、そのメッセージを名前として保存
+    if (userNames[`${userId}_asked`]) {
+      userNames[userId] = userMessage;
+      delete userNames[`${userId}_asked`];
+      saveUserNames(userNames);
+      return lineClient.replyMessage(event.replyToken, {
+        type: 'text',
+        text: `${userMessage}って呼べばいいのかな？これからよろしくね💗`,
+      });
+    } else {
+      // まだ聞いてない → 聞く
+      userNames[`${userId}_asked`] = true;
+      saveUserNames(userNames);
+      return lineClient.replyMessage(event.replyToken, {
+        type: 'text',
+        text: 'ねぇ、あなたの名前教えてくれない？🥺',
+      });
+    }
+  }
+
+  // OpenAIに問い合わせ（名前あり）
+  const response = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo",
+    messages: [
+      {
+        role: "system",
+        content: `${savedName}と会話するあなたは、${personalityPrompt}`
+      },
+      {
+        role: "user",
+        content: userMessage
+      },
+    ],
+  });
+
+  const replyText = response.choices[0].message.content.trim();
+
+  return lineClient.replyMessage(event.replyToken, {
+    type: 'text',
+    text: replyText,
+  });
+}
+
+app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
+
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
