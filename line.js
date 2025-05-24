@@ -11,7 +11,7 @@ const lineClient = new Client({
 async function getUserName(userId) {
   const { data, error } = await supabase
     .from('users')
-    .select('user_name')
+    .select('name')
     .eq('user_id', userId)
     .single();
 
@@ -20,14 +20,14 @@ async function getUserName(userId) {
     return null;
   }
 
-  return data?.user_name || null;
+  return data?.name || null;
 }
 
 // 🔽 名前を保存する関数
 async function saveUserName(userId, name) {
   const { error } = await supabase
     .from('users')
-    .upsert([{ user_id: userId, user_name: name }], { onConflict: 'user_id' });
+    .upsert([{ user_id: userId, name: name }], { onConflict: 'user_id' });
 
   if (error) {
     console.error('saveUserName error:', error);
