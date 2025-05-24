@@ -1,59 +1,54 @@
+// index.js
+import 'dotenv/config';  // .envの内容を環境変数にセット
 import express from 'express';
-import { config } from 'dotenv';
-import { OpenAI } from 'openai';
-import line from '@line/bot-sdk';
-
-config(); // .envファイルから環境変数を読み込む
-
-// LINEの設定
-const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
-};
-
-// OpenAIの設定（v4対応）
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { middleware, Client } from '@line/bot-sdk';
 
 const app = express();
-app.use(express.json());
-app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
-  const events = req.body.events;
-  if (!events.length) {
-    return res.status(200).send('No events');
-  }
 
-  // 応答を非同期で処理
-  const results = await Promise.all(events.map(handleEvent));
-  res.status(200).json(results);
-});
+const config = {
+  channelSecret: process.env.CHANNEL_SECRET,
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+};
 
-// ユーザーからのメッセージを処理
-async function handleEvent(event) {
-  if (event.type !== 'message' || event.message.type !== 'text') {
-    return Promise.resolve(null);
-  }
-
-  const userMessage = event.message.text;
-
-  // ChatGPTへ送信
-  const chatResponse = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo', // または "gpt-4"
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  const replyText = chatResponse.choices[0].message.content;
-
-  const client = new line.Client(lineConfig);
-  return client.replyMessage(event.replyToken, {
-    type: 'text',
-    text: replyText,
-  });
+// 環境変数が設定されているか確認
+if (!config.channelSecret || !config.channelAccessToken) {
+  throw new Error('CHANNEL_SECRET or CHANNEL_ACCESS_TOKEN is missing in environment variables');
 }
 
-// サーバー起動
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// LINE SDKのmiddlewareを使う
+app.use(middleware(config));
+
+// LINEクライアントのインスタンス生成
+const client = new Client(config);
+
+// 受け取ったWebhookイベントの処理例（簡単な返信）
+app.post('/webhook', express.json(), (req, res) => {
+  // LINEプラットフォームからのイベントを受け取る
+  const events = req.body.events;
+
+  // 全イベントを非同期で処理
+  Promise.all(
+    events.map(async (event) => {
+      if (event.type === 'message' && event.message.type === 'text') {
+        // 受け取ったテキストメッセージに対して同じテキストで返信する例
+        return client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `あなたは「${event.message.text}」と言いましたね！`,
+        });
+      }
+      // 他のタイプのイベントは無視
+      return Promise.resolve(null);
+    })
+  )
+    .then(() => res.status(200).send('OK'))
+    .catch((err) => {
+      console.error(err);
+      res.status(500).send('Error');
+    });
+});
+
+// ポート設定（Renderの環境変数PORTを使う）
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
