@@ -10,52 +10,32 @@ const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// 環境変数チェック
+// 環境変数が設定されているか確認
 if (!config.channelSecret || !config.channelAccessToken) {
   throw new Error('CHANNEL_SECRET or CHANNEL_ACCESS_TOKEN is missing in environment variables');
 }
+
+// OpenAI設定
 if (!process.env.OPENAI_API_KEY) {
   throw new Error('OPENAI_API_KEY is missing in environment variables');
 }
 
-// LINE SDKのmiddleware
-app.use(middleware(config));
-
-// LINEクライアントのインスタンス生成
-const client = new Client(config);
-
-// OpenAI設定
 const openaiConfig = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(openaiConfig);
 
-//人格プロンプトはRenderの環境変数にて設定
-const systemPrompt = process.env.BOT_PERSONALITY_PROMPT;
-if (!systemPrompt) {
-  throw new Error('環境変数 BOT_PERSONALITY_PROMPT が設定されていません');
-}
+// 人格プロンプト（環境変数がなければデフォルトを使う）
+const personalityPrompt = process.env.PERSONALITY_PROMPT || 
+  'あなたは女性で癒し系の優しい人格を持つAIアシスタントです。優しく丁寧に返答してください。';
 
-async function getChatGPTReply(userText) {
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userText },
-  ];
+// LINE SDKのmiddlewareを使う
+app.use(middleware(config));
 
-  try {
-    const completion = await openai.createChatCompletion({
-      model: 'gpt-4o-mini', // GPT-4o-miniやgpt-4でもOK
-      messages: messages,
-      max_tokens: 150,
-    });
-    const reply = completion.data.choices[0].message.content.trim();
-    return reply;
-  } catch (error) {
-    console.error('OpenAI API error:', error);
-    return 'ごめんなさい、今ちょっと調子が悪いみたいです。もう一度話しかけてくださいね。';
-  }
-}
+// LINEクライアントのインスタンス生成
+const client = new Client(config);
 
+// Webhookイベント処理
 app.post('/webhook', express.json(), async (req, res) => {
   const events = req.body.events;
 
@@ -63,23 +43,38 @@ app.post('/webhook', express.json(), async (req, res) => {
     await Promise.all(events.map(async (event) => {
       if (event.type === 'message' && event.message.type === 'text') {
         const userMessage = event.message.text;
-        const aiReply = await getChatGPTReply(userMessage);
 
-        return client.replyMessage(event.replyToken, {
+        // OpenAIに送る会話履歴を作成（人格プロンプト＋ユーザーメッセージ）
+        const messages = [
+          { role: 'system', content: personalityPrompt },
+          { role: 'user', content: userMessage },
+        ];
+
+        // Chat Completion APIを呼び出し
+        const completion = await openai.createChatCompletion({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 1000,
+        });
+
+        const replyText = completion.data.choices[0].message.content;
+
+        // LINEに返信
+        await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: aiReply,
+          text: replyText,
         });
       }
-      return Promise.resolve(null);
     }));
-
     res.status(200).send('OK');
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error(error);
     res.status(500).send('Error');
   }
 });
 
+// ポート設定（Renderの環境変数PORTを使う）
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
