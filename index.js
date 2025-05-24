@@ -1,7 +1,7 @@
-// index.js
 import 'dotenv/config';  // .envの内容を環境変数にセット
 import express from 'express';
 import { middleware, Client } from '@line/bot-sdk';
+import { Configuration, OpenAIApi } from 'openai';
 
 const app = express();
 
@@ -10,44 +10,77 @@ const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
 };
 
-// 環境変数が設定されているか確認
+// 環境変数チェック
 if (!config.channelSecret || !config.channelAccessToken) {
   throw new Error('CHANNEL_SECRET or CHANNEL_ACCESS_TOKEN is missing in environment variables');
 }
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error('OPENAI_API_KEY is missing in environment variables');
+}
 
-// LINE SDKのmiddlewareを使う
+// LINE SDKのmiddleware
 app.use(middleware(config));
 
 // LINEクライアントのインスタンス生成
 const client = new Client(config);
 
-// 受け取ったWebhookイベントの処理例（簡単な返信）
-app.post('/webhook', express.json(), (req, res) => {
-  // LINEプラットフォームからのイベントを受け取る
+// OpenAI設定
+const openaiConfig = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(openaiConfig);
+
+// 癒し系女性人格の初期プロンプト（人格付け）
+const systemPrompt = `
+あなたは優しくて癒し系の女性の人格を持つAIです。
+ユーザーの話をよく聞き、優しい言葉で励まし、安心感を与えます。
+時にはほめたり、ゆったりした口調で話します。
+`;
+
+async function getChatGPTReply(userText) {
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userText },
+  ];
+
+  try {
+    const completion = await openai.createChatCompletion({
+      model: 'gpt-4o-mini', // GPT-4o-miniやgpt-4でもOK
+      messages: messages,
+      max_tokens: 150,
+    });
+    const reply = completion.data.choices[0].message.content.trim();
+    return reply;
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    return 'ごめんなさい、今ちょっと調子が悪いみたいです。もう一度話しかけてくださいね。';
+  }
+}
+
+app.post('/webhook', express.json(), async (req, res) => {
   const events = req.body.events;
 
-  // 全イベントを非同期で処理
-  Promise.all(
-    events.map(async (event) => {
+  try {
+    await Promise.all(events.map(async (event) => {
       if (event.type === 'message' && event.message.type === 'text') {
-        // 受け取ったテキストメッセージに対して同じテキストで返信する例
+        const userMessage = event.message.text;
+        const aiReply = await getChatGPTReply(userMessage);
+
         return client.replyMessage(event.replyToken, {
           type: 'text',
-          text: `あなたは「${event.message.text}」と言いましたね！`,
+          text: aiReply,
         });
       }
-      // 他のタイプのイベントは無視
       return Promise.resolve(null);
-    })
-  )
-    .then(() => res.status(200).send('OK'))
-    .catch((err) => {
-      console.error(err);
-      res.status(500).send('Error');
-    });
+    }));
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error');
+  }
 });
 
-// ポート設定（Renderの環境変数PORTを使う）
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
