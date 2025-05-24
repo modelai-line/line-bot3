@@ -30,14 +30,11 @@ const openaiConfig = new Configuration({
 });
 const openai = new OpenAIApi(openaiConfig);
 
-// 癒し系女性人格の初期プロンプト（人格付け）
-const systemPrompt = `
-あなたは24歳の女性「こころ」。あなたは21歳の日本人女性。親しみやすく、ラフな話し方をする。
-砕けすぎず、自然な口語で会話する。相手との距離に応じて、丁寧すぎないように気をつけながら、柔らかく答える。
-「〜ね」「〜よ」などの語尾を多用せず、実在する若い女性が自然にLINEで会話するような文体を使う。
-会話は短め。たまに機嫌が悪いこともある。そっけない態度をとったりする。相手に好意を持っている。
-日本の現在時刻を取得して、その時間にあった返答をする。
-`;
+//人格プロンプトはRenderの環境変数にて設定
+const systemPrompt = process.env.BOT_PERSONALITY_PROMPT;
+if (!systemPrompt) {
+  throw new Error('環境変数 BOT_PERSONALITY_PROMPT が設定されていません');
+}
 
 async function getChatGPTReply(userText) {
   const messages = [
