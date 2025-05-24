@@ -1,44 +1,34 @@
-const supabase = require('./supabaseClient'); // 追加
+const { Client, middleware } = require('@line/bot-sdk');
 const { generateReply } = require('./chat');
-const { Client } = require('@line/bot-sdk');
+const fs = require('fs');
+const path = require('path');
 
-const lineClient = new Client({
+const userDataFile = path.join(__dirname, 'usernames.json');
+
+const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET,
-});
+};
 
-// 🔽 名前を取得する関数
-async function getUserName(userId) {
-  const { data, error } = await supabase
-    .from('users')
-    .select('name')
-    .eq('user_id', userId)
-    .single();
+const lineClient = new Client(lineConfig);
 
-  if (error) {
-    console.error('getUserName error:', error);
-    return null;
-  }
-
-  return data?.name || null;
+let userNames = {};
+try {
+  userNames = JSON.parse(fs.readFileSync(userDataFile, 'utf8'));
+} catch {
+  userNames = {};
 }
 
-// 🔽 名前を保存する関数
-async function saveUserName(userId, name) {
-  const { error } = await supabase
-    .from('users')
-    .upsert([{ user_id: userId, name: name }], { onConflict: 'user_id' });
-
-  if (error) {
-    console.error('saveUserName error:', error);
-  }
+function saveUserNames(data) {
+  fs.writeFileSync(userDataFile, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// 🔽 Webhook の中で使うように修正
 async function handleLineWebhook(req, res) {
   try {
     const events = req.body.events;
-    if (!events || events.length === 0) return res.status(200).send('No events');
+    if (!events || events.length === 0) {
+      return res.status(200).send('No events');
+    }
 
     const promises = events.map(async (event) => {
       if (event.type !== 'message' || event.message.type !== 'text') return;
@@ -46,24 +36,31 @@ async function handleLineWebhook(req, res) {
       const userId = event.source.userId;
       const userMessage = event.message.text.trim();
 
-      const savedName = await getUserName(userId);
+      const savedName = userNames[userId];
 
+      // 名前未登録時の処理
       if (!savedName) {
-        if (userMessage.length < 20) {
-          await saveUserName(userId, userMessage);
+        if (userNames[`${userId}_asked`]) {
+          userNames[userId] = userMessage;
+          delete userNames[`${userId}_asked`];
+          saveUserNames(userNames);
+
           return lineClient.replyMessage(event.replyToken, {
             type: 'text',
             text: `${userMessage}って呼べばいいのかな？これからよろしくね💗`,
           });
         } else {
+          userNames[`${userId}_asked`] = true;
+          saveUserNames(userNames);
+
           return lineClient.replyMessage(event.replyToken, {
             type: 'text',
-            text: 'ねぇ、あなたの名前教えてくれない？🥺（短めでね）',
+            text: 'ねぇ、あなたの名前教えてくれない？🥺',
           });
         }
       }
 
-      // 通常の応答生成
+      // 名前がある場合はchat.jsのgenerateReplyを呼ぶ
       const replyText = await generateReply(userId, userMessage, savedName);
 
       return lineClient.replyMessage(event.replyToken, {
@@ -73,6 +70,7 @@ async function handleLineWebhook(req, res) {
     });
 
     await Promise.all(promises);
+
     res.status(200).send('OK');
   } catch (error) {
     console.error('handleLineWebhook error:', error);
