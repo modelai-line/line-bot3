@@ -50,7 +50,7 @@ async function generateReply(userId, userMessage, userName) {
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4',  // 必要に応じて変えてください
+    model: 'gpt-3.5',  // 必要に応じて変えてください
     messages,
   });
 
