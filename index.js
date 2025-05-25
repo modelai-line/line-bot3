@@ -98,7 +98,7 @@ async function generateReply(userId, userMessage, userName) {
   const completion = await openai.chat.completions.create({
     model: 'gpt-3.5-turbo',
     messages,
-    max_tokens: 50,      // 最大50トークンに制限（短く話す）
+    max_tokens: 80,      // 最大50トークンに制限（短く話す）
     temperature: 0.7,    // 返答のランダム度（創造性）
   });
 
