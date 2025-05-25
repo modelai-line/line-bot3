@@ -1,53 +1,46 @@
-// 必要なモジュールの読み込み
+// 必要なライブラリを読み込み
 const express = require('express');
 const { Client } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
-require('dotenv').config(); // .envファイルの読み込み
+const fs = require('fs');
+const path = require('path');
 
-// LINEの設定（アクセストークンとシークレットを環境変数から取得）
+// LINE Messaging APIの設定
 const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET,
 };
 
-// 各サービスのクライアント初期化
+// LINEクライアントのインスタンス作成
 const lineClient = new Client(lineConfig);
+
+// Supabaseクライアントの作成（DB連携）
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+// OpenAIのインスタンス作成（ChatGPT API）
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// デフォルトの人格プロンプト（環境変数がなければこの文を使用）
+// デフォルトのキャラクター性格プロンプト（環境変数または固定文）
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性「こころ」。口調はゆるくて、ため口で話す。";
 
-// 一時的に「名前を聞いたかどうか」を記録するフラグ用オブジェクト（メモリ上のみ）
-const nameRequestFlags = {};
+// ユーザー名の保存ファイルのパスを設定
+const userDataFile = path.join(__dirname, 'usernames.json');
 
-// Supabaseからユーザー名を取得
-async function getUserName(userId) {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('user_name')
-    .eq('user_id', userId)
-    .single();
-
-  if (error || !data) {
-    return null; // 見つからない、またはエラーがある場合
-  }
-  return data.user_name;
+// ユーザー名をロード（JSONファイルから）
+let userNames = {};
+try {
+  userNames = JSON.parse(fs.readFileSync(userDataFile, 'utf8'));
+} catch {
+  userNames = {};
 }
 
-// Supabaseにユーザー名を保存
-async function saveUserName(userId, userName) {
-  const { error } = await supabase
-    .from('user_profiles')
-    .insert([{ user_id: userId, user_name: userName }]);
-
-  if (error) {
-    console.error('Supabase saveUserName error:', error);
-  }
+// ユーザー名をファイルに保存する関数
+function saveUserNames(data) {
+  fs.writeFileSync(userDataFile, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// 過去のメッセージ履歴を取得（新しい順に並べてから逆順にする）
+// 最近のメッセージ履歴をSupabaseから取得
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
     .from('chat_messages')
@@ -60,10 +53,10 @@ async function getRecentMessages(userId, limit = 5) {
     console.error('Supabase getRecentMessages error:', error);
     return [];
   }
-  return data.reverse(); // 古い順に並べ直す
+  return data.reverse(); // 時系列を正順にする
 }
 
-// チャットのメッセージを保存（ユーザー or AIの発言）
+// メッセージをSupabaseに保存
 async function saveMessage(userId, role, content) {
   const { error } = await supabase
     .from('chat_messages')
@@ -73,11 +66,11 @@ async function saveMessage(userId, role, content) {
   }
 }
 
-// OpenAIにリクエストして返答を生成
+// ChatGPTを使って返信を生成
 async function generateReply(userId, userMessage, userName) {
-  await saveMessage(userId, 'user', userMessage); // ユーザーの発言を保存
+  await saveMessage(userId, 'user', userMessage); // ユーザーメッセージを保存
 
-  // ユーザーごとの人格プロンプトがあれば取得
+  // 個別に設定された性格プロンプトがあれば取得
   const { data: personalityData, error: personalityError } = await supabase
     .from('personality')
     .select('prompt')
@@ -89,98 +82,99 @@ async function generateReply(userId, userMessage, userName) {
     promptToUse = personalityData.prompt;
   }
 
-  // 最近のメッセージ履歴を取得
+  // 最近のチャット履歴を取得（文脈として渡す）
   const recentMessages = await getRecentMessages(userId, 10);
 
-  // システムメッセージ（人格・ルールの指定）
+  // システムメッセージにキャラ設定と「短めに話すように」指示
   const systemMessage = {
     role: 'system',
     content: `${userName}と会話するあなたは、${promptToUse}。回答はできるだけ端的で短くしてください。`,
   };
 
-  // OpenAIへ送るメッセージ一覧（システム＋履歴）
+  // ChatGPTに渡す全メッセージを整形
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
 
-  // OpenAIへAPIリクエスト
+  // ChatGPTにリクエスト（短く話すようmax_tokens制限）
   const completion = await openai.chat.completions.create({
     model: 'gpt-3.5-turbo',
     messages,
-    max_tokens: 50,
-    temperature: 0.7,
+    max_tokens: 50,      // 最大50トークンに制限（短く話す）
+    temperature: 0.7,    // 返答のランダム度（創造性）
   });
 
-  // AIの返答を取得してトリム
-  const botReply = completion.choices[0].message.content.trim();
+  const botReply = completion.choices[0].message.content.trim(); // 返答取得
 
-  await saveMessage(userId, 'assistant', botReply); // AIの返答を保存
+  await saveMessage(userId, 'assistant', botReply); // Botの返答を保存
 
-  return botReply;
+  return botReply; // LINEへ返す用
 }
 
-// LINEのWebhookハンドラ（ユーザーからのメッセージに反応）
+// LINEのWebhookを処理する関数
 async function handleLineWebhook(req, res) {
   try {
     const events = req.body.events;
     if (!events || events.length === 0) {
-      return res.status(200).send('No events'); // イベントがなければ終了
+      return res.status(200).send('No events'); // イベントなし
     }
 
     const promises = events.map(async (event) => {
-      // テキストメッセージのみ処理対象
-      if (event.type !== 'message' || event.message.type !== 'text') return;
+      if (event.type !== 'message' || event.message.type !== 'text') return; // テキスト以外は無視
 
       const userId = event.source.userId;
       const userMessage = event.message.text.trim();
 
-      const savedName = await getUserName(userId); // ユーザー名の取得
+      const savedName = userNames[userId];
 
+      // 名前が未登録なら、名前を聞くフロー
       if (!savedName) {
-        // 名前を聞いた直後なら保存処理へ
-        if (nameRequestFlags[userId]) {
-          await saveUserName(userId, userMessage);
-          delete nameRequestFlags[userId];
+        if (userNames[`${userId}_asked`]) {
+          // 名前を受け取ったら登録
+          userNames[userId] = userMessage;
+          delete userNames[`${userId}_asked`];
+          saveUserNames(userNames);
 
           return lineClient.replyMessage(event.replyToken, {
             type: 'text',
-            text: `${userMessage}って呼ぶね。`, // 登録完了メッセージ
+            text: `${userMessage}って呼ぶね。`,
           });
         } else {
-          // まだ名前を聞いていないなら質問する
-          nameRequestFlags[userId] = true;
+          // 初回は名前を尋ねる
+          userNames[`${userId}_asked`] = true;
+          saveUserNames(userNames);
 
           return lineClient.replyMessage(event.replyToken, {
             type: 'text',
-            text: 'ねぇ、あなたの名前教えてくれない？', // 名前の入力をお願い
+            text: 'ねぇ、あなたの名前教えてくれない？',
           });
         }
       }
 
-      // ユーザー名が取得できた場合、返答を生成
+      // 通常の会話処理
       const replyText = await generateReply(userId, userMessage, savedName);
 
       return lineClient.replyMessage(event.replyToken, {
         type: 'text',
-        text: replyText, // 生成された返答をLINEへ送信
+        text: replyText,
       });
     });
 
-    await Promise.all(promises); // 並列処理をすべて待つ
+    await Promise.all(promises); // すべてのイベントを並列処理
     res.status(200).send('OK');
   } catch (error) {
     console.error('handleLineWebhook error:', error);
-    res.status(500).send('Error'); // エラーハンドリング
+    res.status(500).send('Error');
   }
 }
 
-// Expressアプリの初期化とルーティング設定
+// Expressアプリの設定
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(express.json()); // JSONリクエストのパース
-app.post('/webhook', handleLineWebhook); // Webhookエンドポイント
-app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running")); // テスト用のGETルート
+app.use(express.json()); // JSONボディをパース
+app.post('/webhook', handleLineWebhook); // LINE用Webhookエンドポイント
+app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running")); // 動作確認用
 
-// サーバーの起動
+// サーバー起動
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
