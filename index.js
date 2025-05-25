@@ -33,7 +33,7 @@ function saveUserNames(data) {
 }
 
 // --- Supabase 会話履歴取得 ---
-async function getRecentMessages(userId, limit = 20) {
+async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
     .from('chat_messages')
     .select('role, content')
@@ -121,7 +121,7 @@ async function handleLineWebhook(req, res) {
 
           return lineClient.replyMessage(event.replyToken, {
             type: 'text',
-            text: `${userMessage}って呼べばいいのかな？これからよろしくね💗`,
+            text: `${userMessage}って呼ぶね。`,
           });
         } else {
           userNames[`${userId}_asked`] = true;
@@ -129,7 +129,7 @@ async function handleLineWebhook(req, res) {
 
           return lineClient.replyMessage(event.replyToken, {
             type: 'text',
-            text: 'ねぇ、あなたの名前教えてくれない？🥺',
+            text: 'ねぇ、あなたの名前教えてくれない？',
           });
         }
       }
