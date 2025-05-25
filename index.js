@@ -77,7 +77,7 @@ async function generateReply(userId, userMessage, userName) {
   const completion = await openai.chat.completions.create({
     model: 'gpt-3.5-turbo',
     messages,
-    max_tokens: 100,
+    max_tokens: 50,
     temperature: 0.7,
   });
 
