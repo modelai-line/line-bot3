@@ -86,7 +86,7 @@ async function generateReply(userId, userMessage, userName) {
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-3.5',
+    model: 'gpt-3.5-turbo',
     messages,
   });
 
