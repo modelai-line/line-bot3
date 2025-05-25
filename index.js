@@ -1,5 +1,5 @@
 const express = require('express');
-const { Client, middleware } = require('@line/bot-sdk');
+const { Client } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
 const fs = require('fs');
@@ -64,11 +64,23 @@ async function saveMessage(userId, role, content) {
 async function generateReply(userId, userMessage, userName) {
   await saveMessage(userId, 'user', userMessage);
 
+  // personalityテーブルからユーザーごとのプロンプトを取得
+  const { data: personalityData, error: personalityError } = await supabase
+    .from('personality')
+    .select('prompt')
+    .eq('user_id', userId)
+    .single();
+
+  let promptToUse = personalityPrompt; // デフォルト
+  if (!personalityError && personalityData && personalityData.prompt) {
+    promptToUse = personalityData.prompt;
+  }
+
   const recentMessages = await getRecentMessages(userId, 10);
 
   const systemMessage = {
     role: 'system',
-    content: `${userName}と会話するあなたは、${personalityPrompt}`,
+    content: `${userName}と会話するあなたは、${promptToUse}`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
