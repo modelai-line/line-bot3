@@ -87,9 +87,9 @@ async function generateReply(userId, userMessage, userName) {
 
   // システムメッセージにキャラ設定と「短めに話すように」指示
   const systemMessage = {
-    role: 'system',
-    content: `${userName}と会話するあなたは、${promptToUse}。回答はできるだけ端的で短くしてください。`,
-  };
+  role: 'system',
+  content: `${userName}と会話するあなたは、${promptToUse}。会話は自然体で、LINEでのやりとりのように短くてラフに返して。無駄な説明や丁寧すぎる言い回しは避けて、相手のテンポに合わせて返事して。必要なときだけ詳しく話してOK。`,
+};
 
   // ChatGPTに渡す全メッセージを整形
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
