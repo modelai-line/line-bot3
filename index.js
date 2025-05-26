@@ -84,7 +84,7 @@ async function generateReply(userId, userMessage, userName) {
   if (currentTotal >= 1000) {
     return "ごめんね、今日はもう話せないんだ。また明日ね、バイバイ🌙";
   } else if (currentTotal >= 800) {
-    await saveMessage(userId, 'assistant', "うーん、そろそろ今日はおしまいかも…あと少しかも？💭");
+    await saveMessage(userId, 'assistant', "実はこれから用事があるの。💭");
   }
 
   await saveMessage(userId, 'user', userMessage);
@@ -162,7 +162,7 @@ async function handleLineWebhook(req, res) {
 
           return lineClient.replyMessage(event.replyToken, {
             type: 'text',
-            text: 'ねぇ、あなたの名前教えてくれない？',
+            text: 'ねぇ、あなたの名前教えて。名前だけ送って',
           });
         }
       }
