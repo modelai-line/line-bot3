@@ -3,8 +3,6 @@ const express = require('express');
 const { Client } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
-const fs = require('fs');
-const path = require('path');
 
 // LINE Messaging APIの設定
 const lineConfig = {
@@ -23,22 +21,6 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // デフォルトのキャラクター性格プロンプト（環境変数または固定文）
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性「こころ」。口調はゆるくて、ため口で話す。";
-
-// ユーザー名の保存ファイルのパスを設定
-const userDataFile = path.join(__dirname, 'usernames.json');
-
-// ユーザー名をロード（JSONファイルから）
-let userNames = {};
-try {
-  userNames = JSON.parse(fs.readFileSync(userDataFile, 'utf8'));
-} catch {
-  userNames = {};
-}
-
-// ユーザー名をファイルに保存する関数
-function saveUserNames(data) {
-  fs.writeFileSync(userDataFile, JSON.stringify(data, null, 2), 'utf8');
-}
 
 // 最近のメッセージ履歴をSupabaseから取得
 async function getRecentMessages(userId, limit = 5) {
@@ -144,30 +126,16 @@ async function handleLineWebhook(req, res) {
       const userId = event.source.userId;
       const userMessage = event.message.text.trim();
 
-      const savedName = userNames[userId];
-
-      if (!savedName) {
-        if (userNames[`${userId}_asked`]) {
-          userNames[userId] = userMessage;
-          delete userNames[`${userId}_asked`];
-          saveUserNames(userNames);
-
-          return lineClient.replyMessage(event.replyToken, {
-            type: 'text',
-            text: `${userMessage}って呼ぶね。`,
-          });
-        } else {
-          userNames[`${userId}_asked`] = true;
-          saveUserNames(userNames);
-
-          return lineClient.replyMessage(event.replyToken, {
-            type: 'text',
-            text: 'ねぇ、あなたの名前教えて。名前だけ送って',
-          });
-        }
+      // LINEのdisplayNameを取得
+      let displayName = 'あなた';
+      try {
+        const profile = await lineClient.getProfile(userId);
+        displayName = profile.displayName;
+      } catch (err) {
+        console.warn(`プロフィール取得失敗: ${userId}`, err);
       }
 
-      const replyText = await generateReply(userId, userMessage, savedName);
+      const replyText = await generateReply(userId, userMessage, displayName);
 
       return lineClient.replyMessage(event.replyToken, {
         type: 'text',
