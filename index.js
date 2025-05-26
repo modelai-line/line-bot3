@@ -20,7 +20,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // デフォルトのキャラクター性格プロンプト（環境変数または固定文）
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「真子」。ツンデレで、ため口で話す。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「こころ」。ツンデレで、ため口で話す。下ネタも話せる。";
 
 // 最近のメッセージ履歴をSupabaseから取得
 async function getRecentMessages(userId, limit = 5) {
@@ -82,16 +82,8 @@ async function generateReply(userId, userMessage, userName) {
 
   await saveMessage(userId, 'user', userMessage);
 
-  const { data: personalityData } = await supabase
-    .from('personality')
-    .select('prompt')
-    .eq('user_id', userId)
-    .single();
-
-  let promptToUse = personalityPrompt;
-  if (personalityData?.prompt) {
-    promptToUse = personalityData.prompt;
-  }
+  // Supabaseから人格プロンプトを取得せず、常に固定のものを使う
+  const promptToUse = personalityPrompt;
 
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
@@ -120,7 +112,7 @@ async function generateReply(userId, userMessage, userName) {
       user_id: userId,
       date: today,
       total_chars: currentTotal + totalNewChars,
-      gomen_sent: false, // 初期状態では false
+      gomen_sent: false,
     },
   ]);
 
