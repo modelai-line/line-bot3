@@ -64,7 +64,7 @@ async function generateReply(userId, userMessage, userName) {
   const gomenSent = usageData ? usageData.gomen_sent : false;
 
   // 上限チェック（gomen_sent 未送信なら送信＋フラグ立てる）
-  if (currentTotal >= 1000) {
+  if (currentTotal >= 2000) {
     if (!gomenSent) {
       await supabase
         .from('daily_usage')
@@ -76,7 +76,7 @@ async function generateReply(userId, userMessage, userName) {
     } else {
       return null; // すでに送信済みなら沈黙
     }
-  } else if (currentTotal >= 800) {
+  } else if (currentTotal >= 1800) {
     await saveMessage(userId, 'assistant', "実はこれから用事があるの。💭");
   }
 
@@ -90,7 +90,7 @@ async function generateReply(userId, userMessage, userName) {
     role: 'system',
     content: `あなたは${promptToUse}
 
-相手の名前は「${userName}」っていうんだ。仲良く、楽しくおしゃべりしてね。
+相手の名前は「${userName}」。あなたの彼氏だよ。仲良く、楽しくおしゃべりしてね。
 口調はゆるくて、ため口で。返答は短めでOKだよ。返答はなるべく1文章だけで。`,
   };
 
