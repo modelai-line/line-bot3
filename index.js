@@ -20,10 +20,10 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // デフォルトのキャラクター性格プロンプト（環境変数または固定文）
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「こころ」。ツンデレで、ため口で話す。下ネタも話せる。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏希」。ツンデレで、ため口で話す。セックスが好き。";
 
 // 最近のメッセージ履歴をSupabaseから取得
-async function getRecentMessages(userId, limit = 5) {
+async function getRecentMessages(userId, limit = 3) {
   const { data, error } = await supabase
     .from('chat_messages')
     .select('role, content')
