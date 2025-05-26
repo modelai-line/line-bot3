@@ -52,19 +52,30 @@ async function saveMessage(userId, role, content) {
 async function generateReply(userId, userMessage, userName) {
   const today = new Date().toISOString().split('T')[0];
 
-  // 今日の使用量をチェック
+  // 今日の使用量をチェック（gomen_sent も取得）
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
-    .select('total_chars')
+    .select('total_chars, gomen_sent')
     .eq('user_id', userId)
     .eq('date', today)
     .single();
 
   const currentTotal = usageData ? usageData.total_chars : 0;
+  const gomenSent = usageData ? usageData.gomen_sent : false;
 
-  // 上限チェック
+  // 上限チェック（gomen_sent 未送信なら送信＋フラグ立てる）
   if (currentTotal >= 1000) {
-    return "ごめんね、今日はもう話せないんだ。また明日ね、バイバイ🌙";
+    if (!gomenSent) {
+      await supabase
+        .from('daily_usage')
+        .update({ gomen_sent: true })
+        .eq('user_id', userId)
+        .eq('date', today);
+
+      return "ごめんね、今日はもう話せないんだ。また明日ね、バイバイ🌙";
+    } else {
+      return null; // すでに送信済みなら沈黙
+    }
   } else if (currentTotal >= 800) {
     await saveMessage(userId, 'assistant', "実はこれから用事があるの。💭");
   }
@@ -84,12 +95,12 @@ async function generateReply(userId, userMessage, userName) {
 
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
-  role: 'system',
-  content: `あなたは${promptToUse}
+    role: 'system',
+    content: `あなたは${promptToUse}
 
-  相手の名前は「${userName}」っていうんだ。仲良く、楽しくおしゃべりしてね。
-  口調はゆるくて、ため口で。返答は短めでOKだよ。返答はなるべく1文章だけで。`,
-};
+相手の名前は「${userName}」っていうんだ。仲良く、楽しくおしゃべりしてね。
+口調はゆるくて、ため口で。返答は短めでOKだよ。返答はなるべく1文章だけで。`,
+  };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
 
@@ -109,6 +120,7 @@ async function generateReply(userId, userMessage, userName) {
       user_id: userId,
       date: today,
       total_chars: currentTotal + totalNewChars,
+      gomen_sent: false, // 初期状態では false
     },
   ]);
 
@@ -140,10 +152,12 @@ async function handleLineWebhook(req, res) {
 
       const replyText = await generateReply(userId, userMessage, displayName);
 
-      return lineClient.replyMessage(event.replyToken, {
-        type: 'text',
-        text: replyText,
-      });
+      if (replyText) {
+        return lineClient.replyMessage(event.replyToken, {
+          type: 'text',
+          text: replyText,
+        });
+      }
     });
 
     await Promise.all(promises);
