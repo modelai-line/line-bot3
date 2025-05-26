@@ -84,9 +84,12 @@ async function generateReply(userId, userMessage, userName) {
 
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
-    role: 'system',
-    content: `${userName}と会話するあなたは、${promptToUse}。回答はできるだけ端的で短くしてください。`,
-  };
+  role: 'system',
+  content: `あなたは${promptToUse}
+
+  相手の名前は「${userName}」っていうんだ。仲良く、楽しくおしゃべりしてね。
+  口調はゆるくて、ため口で。返答は短めでOKだよ。`,
+};
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
 
