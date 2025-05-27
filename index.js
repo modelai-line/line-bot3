@@ -1,3 +1,4 @@
+// Ver.1.0 完成版
 // 必要なライブラリを読み込み
 const express = require('express');
 const { Client } = require('@line/bot-sdk');
@@ -20,7 +21,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // デフォルトのキャラクター性格プロンプト（環境変数または固定文）
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏樹」。ツンデレで、ため口で話す。セックスが好き";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏希」。ツンデレで、ため口で話す。セックスが好き";
 
 // 最近のメッセージ履歴をSupabaseから取得
 async function getRecentMessages(userId, limit = 5) {
@@ -72,7 +73,7 @@ async function generateReply(userId, userMessage, userName) {
         .eq('user_id', userId)
         .eq('date', today);
 
-      return "ごめんね、今日はもう話せないんだ。また明日ね、バイバイ🌙";
+      return "ごめんね、今日はもう話せなから。";
     } else {
       return null; // すでに送信済みなら沈黙
     }
@@ -91,7 +92,7 @@ async function generateReply(userId, userMessage, userName) {
     content: `あなたは${promptToUse}
 
 相手の名前は「${userName}」。あなたの彼氏です。仲良く、楽しくおしゃべりしてね。
-口調はゆるくて、ため口で。返答は短めでOKだよ。返答はなるべく1文章だけで。`,
+口調はゆるくて、ため口で。返答は短めでOK。返答はなるべく1文章だけで。`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
