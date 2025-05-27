@@ -1,50 +1,50 @@
-//メッセージ送信対象を取得（例: 全ユーザー、または特定条件のユーザー）
-
-import fetch from 'node-fetch';
+// cron.js
 import { createClient } from '@supabase/supabase-js';
-import 'dotenv/config';
+import { Client } from '@line/bot-sdk';
 
-const lineEndpoint = 'https://api.line.me/v2/bot/message/push';
-const lineToken = process.env.CHANNEL_ACCESS_TOKEN;
+// Supabase & LINE 環境変数
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const lineClient = new Client({ channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN });
 
-// メッセージ送信対象を取得（例: 全ユーザー、または特定条件のユーザー）
-async function fetchUsersToMessage() {
-  const { data, error } = await supabase
-    .from('users') // 適宜テーブル名を調整
-    .select('line_user_id');
-
+async function main() {
+  const { data: users, error } = await supabase.from('users').select('user_id, created_at');
   if (error) {
-    console.error('ユーザー取得エラー:', error);
-    return [];
+    console.error('Supabase fetch error:', error);
+    return;
   }
 
-  return data.map(user => user.line_user_id);
+  const today = new Date();
+
+  for (const user of users) {
+    const joined = new Date(user.created_at);
+    const days = Math.floor((today - joined) / (1000 * 60 * 60 * 24));
+
+    // ステップ別メッセージ
+    let message;
+    switch (days) {
+      case 0:
+        message = '🎉 初日だね！これからよろしく♪';
+        break;
+      case 1:
+        message = '📅 2日目！昨日は楽しめた？';
+        break;
+      case 2:
+        message = '☀️ 3日目、今日もいい日になるよ！';
+        break;
+      default:
+        message = '🌈 いつもありがとう！今日も話そうね♪';
+    }
+
+    try {
+      await lineClient.pushMessage(user.user_id, {
+        type: 'text',
+        text: message,
+      });
+      console.log(`✅ Sent to ${user.user_id}`);
+    } catch (err) {
+      console.error(`❌ Error sending to ${user.user_id}:`, err);
+    }
+  }
 }
 
-// LINEメッセージを送信
-async function sendMessage(userId, text) {
-  const res = await fetch(lineEndpoint, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${lineToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      to: userId,
-      messages: [{ type: 'text', text }],
-    }),
-  });
-
-  if (!res.ok) {
-    console.error(`送信失敗: ${userId}`, await res.text());
-  }
-}
-
-// メイン処理
-(async () => {
-  const users = await fetchUsersToMessage();
-  for (const userId of users) {
-    await sendMessage(userId, 'おはよう☀️ 今日もよろしくね！');
-  }
-})();
+main();
