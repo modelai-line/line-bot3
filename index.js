@@ -21,7 +21,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // デフォルトのキャラクター性格プロンプト（環境変数または固定文）
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏希」。ツンデレで、ため口で話す。セックスが好き";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
 
 // 最近のメッセージ履歴をSupabaseから取得
 async function getRecentMessages(userId, limit = 5) {
@@ -65,7 +65,7 @@ async function generateReply(userId, userMessage, userName) {
   const gomenSent = usageData ? usageData.gomen_sent : false;
 
   // 上限チェック（gomen_sent 未送信なら送信＋フラグ立てる）
-  if (currentTotal >= 1000) {
+  if (currentTotal >= 2000) {
     if (!gomenSent) {
       await supabase
         .from('daily_usage')
@@ -77,7 +77,7 @@ async function generateReply(userId, userMessage, userName) {
     } else {
       return null; // すでに送信済みなら沈黙
     }
-  } else if (currentTotal >= 800) {
+  } else if (currentTotal >= 1800) {
     await saveMessage(userId, 'assistant', "実はこれから用事があるの。💭");
   }
 
