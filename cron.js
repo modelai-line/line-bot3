@@ -7,7 +7,12 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const lineClient = new Client({ channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN });
 
 async function main() {
-  const { data: users, error } = await supabase.from('users').select('user_id, created_at');
+  // daily_usage から最新の登録日（date）を取得
+  const { data: users, error } = await supabase
+    .from('daily_usage')
+    .select('user_id, date')
+    .order('date', { ascending: false });
+
   if (error) {
     console.error('Supabase fetch error:', error);
     return;
@@ -16,7 +21,7 @@ async function main() {
   const today = new Date();
 
   for (const user of users) {
-    const joined = new Date(user.created_at);
+    const joined = new Date(user.date);
     const days = Math.floor((today - joined) / (1000 * 60 * 60 * 24));
 
     // ステップ別メッセージ
