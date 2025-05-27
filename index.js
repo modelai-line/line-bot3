@@ -92,7 +92,7 @@ async function generateReply(userId, userMessage, userName) {
     content: `あなたは${promptToUse}
 
 相手の名前は「${userName}」。あなたの彼氏です。仲良く、楽しくおしゃべりしてね。
-口調はゆるくて、ため口で。返答は短めでOK。返答はなるべく1文章だけで。`,
+口調はゆるくて、ため口で。返答は短めでOK。同じメッセージを繰り返さないでください。`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
