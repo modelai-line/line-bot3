@@ -10,7 +10,6 @@ const lineConfig = {
   channelSecret: process.env.CHANNEL_SECRET,
 };
 
-// LINEクライアントのインスタンス作成
 const lineClient = new Client(lineConfig);
 
 // Supabaseクライアントの作成（DB連携）
@@ -19,7 +18,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 // OpenAIのインスタンス作成（ChatGPT API）
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// デフォルトのキャラクター性格プロンプト（環境変数または固定文）
+// キャラ性格
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏希」。ツンデレで、ため口で話す。セックスが好き。";
 
 // 最近のメッセージ履歴をSupabaseから取得
@@ -35,7 +34,7 @@ async function getRecentMessages(userId, limit = 3) {
     console.error('Supabase getRecentMessages error:', error);
     return [];
   }
-  return data.reverse(); // 時系列を正順にする
+  return data.reverse();
 }
 
 // メッセージをSupabaseに保存
@@ -48,78 +47,101 @@ async function saveMessage(userId, role, content) {
   }
 }
 
-// ChatGPTを使って返信を生成
-async function generateReply(userId, userMessage, userName) {
+// 今日の文字数を取得
+async function getTodayCharCount(userId) {
   const today = new Date().toISOString().split('T')[0];
 
-  // 今日の使用量をチェック（gomen_sent も取得）
-  const { data: usageData, error: usageError } = await supabase
+  const { data, error } = await supabase
     .from('daily_usage')
-    .select('total_chars, gomen_sent')
+    .select('total_chara')
     .eq('user_id', userId)
     .eq('date', today)
     .single();
 
-  const currentTotal = usageData ? usageData.total_chars : 0;
-  const gomenSent = usageData ? usageData.gomen_sent : false;
-
-  // 上限チェック（gomen_sent 未送信なら送信＋フラグ立てる）
-  if (currentTotal >= 2000) {
-    if (!gomenSent) {
-      await supabase
-        .from('daily_usage')
-        .update({ gomen_sent: true })
-        .eq('user_id', userId)
-        .eq('date', today);
-
-      return "ごめんね、今日はもう話せないんだ。また明日ね、バイバイ🌙";
-    } else {
-      return null; // すでに送信済みなら沈黙
-    }
-  } else if (currentTotal >= 1800) {
-    await saveMessage(userId, 'assistant', "実はこれから用事があるの。💭");
-  }
-
-  await saveMessage(userId, 'user', userMessage);
-
-  // Supabaseから人格プロンプトを取得せず、常に固定のものを使う
-  const promptToUse = personalityPrompt;
-
-  const recentMessages = await getRecentMessages(userId, 10);
-  const systemMessage = {
-    role: 'system',
-    content: `あなたは${promptToUse}
-
-相手の名前は「${userName}」。あなたの彼氏だよ。仲良く、楽しくおしゃべりしてね。
-口調はゆるくて、ため口で。返答は短めでOKだよ。返答はなるべく1文章だけで。`,
-  };
-
-  const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
-    messages,
-    max_tokens: 100,
-    temperature: 0.7,
-  });
-
-  const botReply = completion.choices[0].message.content.trim();
-  await saveMessage(userId, 'assistant', botReply);
-
-  const totalNewChars = userMessage.length + botReply.length;
-  await supabase.from('daily_usage').upsert([
-    {
-      user_id: userId,
-      date: today,
-      total_chars: currentTotal + totalNewChars,
-      gomen_sent: false,
-    },
-  ]);
-
-  return botReply;
+  if (error || !data) return 0;
+  return data.total_chara || 0;
 }
 
-// LINEのWebhookを処理する関数
+// 今日の文字数を更新
+async function updateTodayCharCount(userId, addCount) {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('daily_usage')
+    .upsert({
+      user_id: userId,
+      date: today,
+      total_chara: addCount,
+    }, { onConflict: ['user_id', 'date'] });
+
+  if (error) {
+    console.error('Supabase updateTodayCharCount error:', error);
+  }
+}
+
+// total_chara をリセットする関数
+async function resetDailyLimit(userId) {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { error } = await supabase
+    .from('daily_usage')
+    .upsert({
+      user_id: userId,
+      date: today,
+      total_chara: 0,
+    }, { onConflict: ['user_id', 'date'] });
+
+  if (error) {
+    console.error('Supabase resetDailyLimit error:', error);
+    return false;
+  }
+  return true;
+}
+
+// ChatGPTを使って返信を生成
+async function generateReply(userId, userMessage, userName) {
+  const LIMIT = 2000;
+
+  // 「リミットクリア」でtotal_charaを0にリセット
+  if (userMessage === 'リミットクリア') {
+    const success = await resetDailyLimit(userId);
+    return success ? 'リミットをクリアしたよ！また話そっ♡' : 'リミットクリアに失敗しちゃった…';
+  }
+
+  // リミット超過チェック
+  const currentCharCount = await getTodayCharCount(userId);
+  if (currentCharCount + userMessage.length > LIMIT) {
+    return '今日はたくさん話したね！また明日♡';
+  }
+
+  const recentMessages = await getRecentMessages(userId);
+
+  const messages = [
+    { role: 'system', content: personalityPrompt },
+    ...recentMessages,
+    { role: 'user', content: userMessage },
+  ];
+
+  try {
+    const chatCompletion = await openai.chat.completions.create({
+      messages,
+      model: 'gpt-3.5-turbo',
+    });
+
+    const reply = chatCompletion.choices[0].message.content;
+
+    await saveMessage(userId, 'user', userMessage);
+    await saveMessage(userId, 'assistant', reply);
+    await updateTodayCharCount(userId, currentCharCount + userMessage.length);
+
+    return reply;
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    return 'ちょっと今調子悪いかも…後でまた話そ？';
+  }
+}
+
+// LINE Webhook処理
 async function handleLineWebhook(req, res) {
   try {
     const events = req.body.events;
@@ -133,7 +155,6 @@ async function handleLineWebhook(req, res) {
       const userId = event.source.userId;
       const userMessage = event.message.text.trim();
 
-      // LINEのdisplayNameを取得
       let displayName = 'あなた';
       try {
         const profile = await lineClient.getProfile(userId);
@@ -160,7 +181,7 @@ async function handleLineWebhook(req, res) {
   }
 }
 
-// Expressアプリの設定
+// Expressアプリ設定
 const app = express();
 const port = process.env.PORT || 3000;
 
