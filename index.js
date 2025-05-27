@@ -100,7 +100,7 @@ async function resetDailyLimit(userId) {
 
 // ChatGPTを使って返信を生成
 async function generateReply(userId, userMessage, userName) {
-  const LIMIT = 2000;
+  const LIMIT = 1000;
 
   // 「リミットクリア」でtotal_charaを0にリセット
   if (userMessage === 'リミットクリア') {
