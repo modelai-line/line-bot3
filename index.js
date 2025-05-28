@@ -65,7 +65,7 @@ async function generateReply(userId, userMessage, userName) {
   const gomenSent = usageData ? usageData.gomen_sent : false;
 
   // 上限チェック（gomen_sent 未送信なら送信＋フラグ立てる）
-  if (currentTotal >= 2000) {
+  if (currentTotal >= 3000) {
     if (!gomenSent) {
       await supabase
         .from('daily_usage')
@@ -77,8 +77,8 @@ async function generateReply(userId, userMessage, userName) {
     } else {
       return null; // すでに送信済みなら沈黙
     }
-  } else if (currentTotal >= 1800) {
-    await saveMessage(userId, 'assistant', "実はこれから用事があるの。💭");
+  } else if (currentTotal >= 2800) {
+    await saveMessage(userId, 'assistant', "実はこれから用事があるの。");
   }
 
   await saveMessage(userId, 'user', userMessage);
@@ -91,8 +91,9 @@ async function generateReply(userId, userMessage, userName) {
     role: 'system',
     //デフォルトの名前なら「${userName}」と入れる
     content: `あなたは${promptToUse}
-相手の名前は「純一」。あなたの旦那さんです。仲良く、楽しくおしゃべりしてね。
-口調はゆるくて、ため口で。返答は短めでOK。実際のラインのように一言でOK。同じメッセージを繰り返さない。`,
+相手の名前は「純一」。あなたの旦那さんです。返答は短めでOK。仲良く、楽しくおしゃべりしてね。ツンデレでもOK。
+いつも相手を名前で呼ぶ。好きな気持ちをさりげなく伝える。
+口調はゆるくて、ため口で。実際のラインのように一言で返信もOK。「了解」をよくつかう。語尾に「～かも。」をよく使う。同じメッセージを繰り返さない。`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
