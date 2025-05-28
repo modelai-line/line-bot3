@@ -122,19 +122,6 @@ async function generateReply(userId, userMessage, userName) {
 
 // LINEのWebhookを処理する関数
 async function handleLineWebhook(req, res) {
-
-// user_id を message_targets に upsert（登録または更新）
-await supabase
-  .from('message_targets')
-  .upsert([{ user_id: userId, is_active: true }])
-  .then(({ error }) => {
-    if (error) {
-      console.error('❌ Supabase message_targets upsert エラー:', error.message);
-    } else {
-      console.log(`✅ ${userId} を message_targets に登録 or 更新`);
-    }
-  });
-  
   try {
     const events = req.body.events;
     if (!events || events.length === 0) {
@@ -144,8 +131,20 @@ await supabase
     const promises = events.map(async (event) => {
       if (event.type !== 'message' || event.message.type !== 'text') return;
 
-      const userId = event.source.userId;
+      const userId = event.source.userId; // ここで userId を取得
       const userMessage = event.message.text.trim();
+
+      // ここで message_targets テーブルに upsert する処理を入れると良いです
+      await supabase
+        .from('message_targets')
+        .upsert([{ user_id: userId, is_active: true }])
+        .then(({ error }) => {
+          if (error) {
+            console.error('❌ Supabase message_targets upsert エラー:', error.message);
+          } else {
+            console.log(`✅ ${userId} を message_targets に登録 or 更新`);
+          }
+        });
 
       // LINEのdisplayNameを取得
       let displayName = 'あなた';
