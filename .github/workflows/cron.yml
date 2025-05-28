@@ -1,29 +1,7 @@
-name: Scheduled LINE Message
-
-on:
-  schedule:
-    - cron: '0 7 * * *' # 毎日16:00 JST
-  workflow_dispatch:    # ← 手動実行を有効にするために追加！
-
-jobs:
-  send-line-message:
-    runs-on: ubuntu-latest
-    env:
-      CHANNEL_ACCESS_TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run cron job
-        run: node cron.js
+# RenderのCron設定（例）
+- cron: '0 1 * * *'  # 1回目：日本時間10:00
+  command: 'node cron.js'
+- cron: '0 5 * * *'  # 2回目：日本時間14:00
+  command: 'node cron.js'
+- cron: '0 9 * * *'  # 3回目：日本時間18:00
+  command: 'node cron.js'
