@@ -89,10 +89,10 @@ async function generateReply(userId, userMessage, userName) {
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
     role: 'system',
+    //デフォルトの名前なら「${userName}」と入れる
     content: `あなたは${promptToUse}
-
-相手の名前は「${userName}」。あなたの彼氏です。仲良く、楽しくおしゃべりしてね。
-口調はゆるくて、ため口で。返答は短めでOK。同じメッセージを繰り返さないでください。`,
+相手の名前は「純一」。あなたの旦那さんです。仲良く、楽しくおしゃべりしてね。
+口調はゆるくて、ため口で。返答は短めでOK。実際のラインのように一言でOK。同じメッセージを繰り返さない。`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
