@@ -1,11 +1,26 @@
-- name: morning-message
-  schedule: '0 1 * * *'     # JST 10:00
-  command: 'node cron.js'
+name: Manual Test - Run cron.js
 
-- name: afternoon-message
-  schedule: '0 5 * * *'     # JST 14:00
-  command: 'node cron.js'
+on:
+  workflow_dispatch:  # ← 手動実行を有効にする
 
-- name: evening-message
-  schedule: '0 9 * * *'     # JST 18:00
-  command: 'node cron.js'
+jobs:
+  run-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'  # バージョンはプロジェクトに合わせて
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run cron.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
+        run: node cron.js
