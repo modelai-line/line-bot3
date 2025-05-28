@@ -1,7 +1,11 @@
-# RenderのCron設定（例）
-- cron: '0 1 * * *'  # 1回目：日本時間10:00
+- name: morning-message
+  schedule: '0 1 * * *'     # JST 10:00
   command: 'node cron.js'
-- cron: '0 5 * * *'  # 2回目：日本時間14:00
+
+- name: afternoon-message
+  schedule: '0 5 * * *'     # JST 14:00
   command: 'node cron.js'
-- cron: '0 9 * * *'  # 3回目：日本時間18:00
+
+- name: evening-message
+  schedule: '0 9 * * *'     # JST 18:00
   command: 'node cron.js'
