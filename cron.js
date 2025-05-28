@@ -1,8 +1,8 @@
 // cron.js
 
-import { createClient } from '@supabase/supabase-js';
-import { Client } from '@line/bot-sdk';
-import 'dotenv/config'; // .env ファイルの読み込み
+const { createClient } = require('@supabase/supabase-js');
+const { Client } = require('@line/bot-sdk');
+require('dotenv').config(); // .env ファイルの読み込み
 
 // Supabase設定
 const supabase = createClient(
