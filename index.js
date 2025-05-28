@@ -122,6 +122,19 @@ async function generateReply(userId, userMessage, userName) {
 
 // LINEのWebhookを処理する関数
 async function handleLineWebhook(req, res) {
+
+// user_id を message_targets に upsert（登録または更新）
+await supabase
+  .from('message_targets')
+  .upsert([{ user_id: userId, is_active: true }])
+  .then(({ error }) => {
+    if (error) {
+      console.error('❌ Supabase message_targets upsert エラー:', error.message);
+    } else {
+      console.log(`✅ ${userId} を message_targets に登録 or 更新`);
+    }
+  });
+  
   try {
     const events = req.body.events;
     if (!events || events.length === 0) {
