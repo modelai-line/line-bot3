@@ -1,55 +1,68 @@
 // cron.js
+
 import { createClient } from '@supabase/supabase-js';
 import { Client } from '@line/bot-sdk';
+import 'dotenv/config'; // .env ファイルの読み込み
 
-// Supabase & LINE 環境変数
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-const lineClient = new Client({ channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN });
+// Supabase設定
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
+// LINE設定
+const lineClient = new Client({
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN
+});
+
+// 配信メッセージ一覧（好きなように編集可）
+const messages = [
+  '🌼 今日も元気にしてた？',
+  '🌸 ゆっくり休めてる？',
+  '🍀 いいことがある日になりますように♪',
+  '☕ ちょっと休憩しよっか？',
+  '📱 ひまなら話そっ♪',
+  '🐱 にゃーん。元気？',
+  '🎀 いつも応援ありがとっ！'
+];
+
+// メイン関数
 async function main() {
-  // daily_usage から最新の登録日（date）を取得
+  console.log('📩 配信処理を開始します…');
+
+  // Supabaseから配信対象ユーザー取得
   const { data: users, error } = await supabase
-    .from('daily_usage')
-    .select('user_id, date')
-    .order('date', { ascending: false });
+    .from('message_targets')
+    .select('user_id')
+    .eq('is_active', true);
 
   if (error) {
-    console.error('Supabase fetch error:', error);
+    console.error('❌ ユーザー取得エラー:', error.message);
     return;
   }
 
-  const today = new Date();
+  if (!users || users.length === 0) {
+    console.log('⚠️ 配信対象のユーザーがいません。');
+    return;
+  }
 
+  // ランダムメッセージを選択
+  const message = messages[Math.floor(Math.random() * messages.length)];
+
+  // 各ユーザーに送信
   for (const user of users) {
-    const joined = new Date(user.date);
-    const days = Math.floor((today - joined) / (1000 * 60 * 60 * 24));
-
-    // ステップ別メッセージ
-    let message;
-    switch (days) {
-      case 0:
-        message = '🎉 初日だね！これからよろしく♪';
-        break;
-      case 1:
-        message = '📅 2日目！昨日は楽しめた？';
-        break;
-      case 2:
-        message = '☀️ 3日目、今日もいい日になるよ！';
-        break;
-      default:
-        message = '🌈 いつもありがとう！今日も話そうね♪';
-    }
-
     try {
       await lineClient.pushMessage(user.user_id, {
         type: 'text',
-        text: message,
+        text: message
       });
-      console.log(`✅ Sent to ${user.user_id}`);
+      console.log(`✅ ${user.user_id} にメッセージを送信しました`);
     } catch (err) {
-      console.error(`❌ Error sending to ${user.user_id}:`, err);
+      console.error(`❌ ${user.user_id} への送信失敗:`, err.message);
     }
   }
+
+  console.log('✅ 配信処理が完了しました。');
 }
 
 main();
