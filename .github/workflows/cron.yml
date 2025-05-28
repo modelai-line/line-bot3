@@ -1,7 +1,13 @@
 name: Manual Test - Run cron.js
 
 on:
-  workflow_dispatch:  # ← 手動実行を有効にする
+  workflow_dispatch:  # 手動実行を有効にする
+  schedule:           # 定期実行（UTC時間に変換済み）
+    - cron: '45 23 * * *'  # JST 08:45
+    - cron: '10 3 * * *'   # JST 12:10
+    - cron: '5 6 * * *'    # JST 15:05
+    - cron: '20 10 * * *'  # JST 19:20
+    - cron: '0 14 * * *'   # JST 23:00
 
 jobs:
   run-cron:
@@ -13,7 +19,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'  # バージョンはプロジェクトに合わせて
+          node-version: '18'
 
       - name: Install dependencies
         run: npm install
