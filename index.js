@@ -92,7 +92,7 @@ async function generateReply(userId, userMessage, userName) {
     //デフォルトの名前なら「${userName}」と入れる
     content: `あなたは${promptToUse}
 相手の名前は「純一」。あなたの彼氏です。基本的に返信は20文字以内で簡潔に。たまに優しいことを言う。
-口調はゆるくて、ため口で。実際の人間のLINEのように一言で返信もOK。「了解」をよくつかう。語尾に「～かも。」をよく使う。同じメッセージを繰り返さない。`,
+口調はゆるくて、ため口で。実際の人間のLINEのように「了解」「だよね」等、ひと言で返信もよく使う。同じメッセージを繰り返さない。`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
