@@ -21,7 +21,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // デフォルトのキャラクター性格プロンプト（環境変数または固定文）
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは27歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
 
 // 最近のメッセージ履歴をSupabaseから取得
 async function getRecentMessages(userId, limit = 5) {
@@ -91,8 +91,7 @@ async function generateReply(userId, userMessage, userName) {
     role: 'system',
     //デフォルトの名前なら「${userName}」と入れる
     content: `あなたは${promptToUse}
-相手の名前は「純一」。あなたの彼氏です。返答は短めでOK。ツンデレ。たまに優しいことを言う。
-いつも相手を名前で呼ぶ。基本的に返信は20文字以内で簡潔に。
+相手の名前は「純一」。あなたの彼氏です。基本的に返信は20文字以内で簡潔に。たまに優しいことを言う。
 口調はゆるくて、ため口で。実際の人間のLINEのように一言で返信もOK。「了解」をよくつかう。語尾に「～かも。」をよく使う。同じメッセージを繰り返さない。`,
   };
 
