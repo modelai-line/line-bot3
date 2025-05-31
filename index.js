@@ -51,20 +51,20 @@ async function generateReply(userId, userMessage, userName) {
   const currentTotal = usageData ? usageData.total_chars : 0;
   const gomenSent = usageData ? usageData.gomen_sent : false;
 
-  if (currentTotal >= 3000) {
+  if (currentTotal >= 1000) {
     if (!gomenSent) {
       await supabase
         .from('daily_usage')
         .update({ gomen_sent: true })
         .eq('user_id', userId)
         .eq('date', today);
-      return "ごめんね、今日はもう、話せないから。";
+      return "ごめんね、ここから先は有料なんだ。URL送るからそこから来てね。https://natsuki-asmr.com";
     } else {
       return null;
     }
-  } else if (currentTotal >= 2800) {
-    await saveMessage(userId, 'assistant', "実はこれから用事があるの。");
-  }
+ // } else if (currentTotal >= 2800) {
+ //   await saveMessage(userId, 'assistant', "実はこれから用事があるの。");
+ // }
 
   await saveMessage(userId, 'user', userMessage);
 
