@@ -6,9 +6,17 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+//水瀬 玲奈
+//const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
+//const STYLE_ID = 58;//素直
 
-const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
-const STYLE_ID = 58;
+//ラピス
+//const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
+//const STYLE_ID = 52;//甘え
+
+//高宮 涼香
+const CHARACTER_ID = "294eeefe-f46c-45a6-9e5a-e6a3b3d6eb6e";
+const STYLE_ID = 25;//優しい
 
 async function generateVoice(text) {
   const fileName = `${uuidv4()}.mp3`;
