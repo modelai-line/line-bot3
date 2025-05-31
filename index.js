@@ -139,11 +139,11 @@ async function handleLineWebhook(req, res) {
         // 🔁 === 返信スタイルの切替: 以下から選んでコメント操作 ===
 
         // --- 音声のみを送る ---
-        return lineClient.replyMessage(event.replyToken, {
-          type: 'audio',
-          originalContentUrl: voiceUrl,
-          duration,
-        });
+        // return lineClient.replyMessage(event.replyToken, {
+        //   type: 'audio',
+        //   originalContentUrl: voiceUrl,
+        //   duration,
+        // });
 
         // --- テキストのみを送る ---
         // return lineClient.replyMessage(event.replyToken, {
@@ -152,10 +152,10 @@ async function handleLineWebhook(req, res) {
         // });
 
         // --- 両方（テキスト + 音声）を送る ---
-        // return lineClient.replyMessage(event.replyToken, [
-        //   { type: 'text', text: replyText },
-        //   { type: 'audio', originalContentUrl: voiceUrl, duration },
-        // ]);
+        return lineClient.replyMessage(event.replyToken, [
+          { type: 'text', text: replyText },
+          { type: 'audio', originalContentUrl: voiceUrl, duration },
+        ]);
 
       } catch (e) {
         console.error("🔊 generateVoice failed:", e.message);
