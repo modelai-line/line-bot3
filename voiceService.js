@@ -2,7 +2,10 @@ const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
 const STYLE_ID = 58;
@@ -26,16 +29,17 @@ async function generateVoice(text) {
           "x-api-key": process.env.NIJI_API_KEY,
           "Content-Type": "application/json",
         },
-        responseType: "arraybuffer", // ✅ ここ重要！
+        responseType: "arraybuffer",
       }
     );
 
     const audioBuffer = Buffer.from(res.data);
+    console.log("🎧 audioBuffer size:", audioBuffer.length); // ✅ チェックポイント
 
     const { data, error } = await supabase.storage
       .from('voice-audio')
       .upload(`audio/${fileName}`, audioBuffer, {
-        contentType: 'audio/mpeg',
+        contentType: 'audio/mp3', // or 'audio/mpeg'
         upsert: true,
       });
 
@@ -44,10 +48,14 @@ async function generateVoice(text) {
       throw error;
     }
 
-    // ✅ 公開URL生成
-    const { data: publicUrlData } = supabase.storage
+    const { data: publicUrlData, error: publicUrlError } = supabase.storage
       .from('voice-audio')
       .getPublicUrl(`audio/${fileName}`);
+
+    if (publicUrlError || !publicUrlData.publicUrl) {
+      console.error("🟠 公開URLの取得に失敗しました");
+      throw new Error("公開URLの取得に失敗しました");
+    }
 
     return publicUrlData.publicUrl;
   } catch (err) {
