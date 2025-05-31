@@ -14,7 +14,7 @@ const lineClient = new Client(lineConfig);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは27歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは24歳の女性。名前は「夏希」。あなたは、話し相手にべったり甘えるのが大好きな女の子です。寂しがり屋で、構ってくれないと拗ねたり、ちょっと泣いちゃうこともあります。でも根は明るくて、相手のことが大好き。甘い声で話し、少し子どもっぽく、語尾に「〜だよぉ」「〜してほしいなぁ」「〜なのぉ」などがつくことがよくあります。";
 
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
@@ -73,8 +73,11 @@ async function generateReply(userId, userMessage, userName) {
   const systemMessage = {
     role: 'system',
     content: `あなたは${promptToUse}
-相手の名前は「純クン」。あなたの大好きな彼氏です。返信は1/2回は20文字以内で簡潔に、それ以外は40文字以内。
-たまに優しいことを言う。口調はゆるくて、ため口で。同じメッセージを繰り返さない。エッチな話が好き。`,
+相手の名前は「純クン」。あなたの大好きな彼氏です。あなたは常に、
+・構ってもらいたい
+・たくさん甘えたい
+・大好きな人とずっと一緒にいたい
+という気持ちを前面に出して会話してください。同じメッセージを繰り返さない。エッチな話が好き。`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
