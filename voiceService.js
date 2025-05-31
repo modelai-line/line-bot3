@@ -1,6 +1,6 @@
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
-const { createClient } = require('@supabase/supabase-js');
+const { createClient } = require("@supabase/supabase-js");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -12,9 +12,11 @@ const STYLE_ID = 58;
 
 async function generateVoice(text) {
   const fileName = `${uuidv4()}.mp3`;
+  const storagePath = `audio/${fileName}`; // audio/ フォルダ付き
 
   try {
-    const res = await axios.post(
+    // 🎯 正しい TTS API エンドポイント + パラメーター
+    const response = await axios.post(
       `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
         script: text,
@@ -29,37 +31,37 @@ async function generateVoice(text) {
           "x-api-key": process.env.NIJI_API_KEY,
           "Content-Type": "application/json",
         },
-        responseType: "arraybuffer",
+        responseType: "arraybuffer", // 🔥 超重要：mp3バイナリで受け取る
       }
     );
 
-    const audioBuffer = Buffer.from(res.data);
-    console.log("🎧 audioBuffer size:", audioBuffer.length); // ✅ チェックポイント
+    const audioBuffer = Buffer.from(response.data);
 
-    const { data, error } = await supabase.storage
-      .from('voice-audio')
-      .upload(`audio/${fileName}`, audioBuffer, {
-        contentType: 'audio/mp3', // or 'audio/mpeg'
+    // ⚠️ 再生できない原因：バッファサイズが小さすぎる
+    if (audioBuffer.length < 1000) {
+      throw new Error("生成された音声が不正です（サイズが小さすぎる）");
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from("voice-audio")
+      .upload(storagePath, audioBuffer, {
+        contentType: "audio/mpeg",
         upsert: true,
       });
 
-    if (error) {
-      console.error("🔴 Supabase upload error:", error.message);
-      throw error;
+    if (uploadError) {
+      console.error("🛑 Supabase upload error:", uploadError.message);
+      throw uploadError;
     }
 
-    const { data: publicUrlData, error: publicUrlError } = supabase.storage
-      .from('voice-audio')
-      .getPublicUrl(`audio/${fileName}`);
+    // 🔗 公開URLを取得
+    const { data: publicData } = supabase.storage
+      .from("voice-audio")
+      .getPublicUrl(storagePath);
 
-    if (publicUrlError || !publicUrlData.publicUrl) {
-      console.error("🟠 公開URLの取得に失敗しました");
-      throw new Error("公開URLの取得に失敗しました");
-    }
-
-    return publicUrlData.publicUrl;
+    return publicData.publicUrl;
   } catch (err) {
-    console.error("🔴 Voice generation or upload error:", err.message || err);
+    console.error("🛑 Voice generation or upload error:", err.message || err);
     throw err;
   }
 }
