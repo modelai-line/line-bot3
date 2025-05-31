@@ -30,9 +30,11 @@ function formatFileName(userName) {
   const dd = String(now.getDate()).padStart(2, "0");
   const hh = String(now.getHours()).padStart(2, "0");
   const min = String(now.getMinutes()).padStart(2, "0");
+  const sec = String(now.getSeconds()).padStart(2, "0"); // ⏱ 秒を追加
   const safeUserName = userName.replace(/[^\w\-]/g, "_");
-  return `${yyyy}${mm}${dd}-${hh}${min}-${safeUserName}.mp3`;
+  return `${yyyy}${mm}${dd}-${hh}${min}${sec}-${safeUserName}.mp3`;
 }
+
 
 // 🔊 音声生成関数
 async function generateVoice(text, userName = "user") {
