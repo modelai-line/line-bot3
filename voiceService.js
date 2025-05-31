@@ -1,16 +1,11 @@
-// ✅ Supabase Storage を使った音声保存版
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
-const { createClient } = require("@supabase/supabase-js");
+const { createClient } = require('@supabase/supabase-js');
 
-const NIJI_API_KEY = process.env.NIJI_API_KEY;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const BUCKET_NAME = "voice-audio";
 const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
-const STYLE_ID = 58; // 例："素直"
+const STYLE_ID = 58;
 
 async function generateVoice(text) {
   const fileName = `${uuidv4()}.mp3`;
@@ -20,37 +15,44 @@ async function generateVoice(text) {
       `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
         script: text,
-        speed: "0.9",
+        speed: "1.0",
         emotionalLevel: "0.1",
         soundDuration: "0.1",
         format: "mp3",
-        style_id: STYLE_ID
+        style_id: STYLE_ID,
       },
       {
         headers: {
-          "x-api-key": NIJI_API_KEY,
+          "x-api-key": process.env.NIJI_API_KEY,
           "Content-Type": "application/json",
         },
-        responseType: "arraybuffer",
+        responseType: "arraybuffer", // ✅ ここ重要！
       }
     );
 
-    const uploadRes = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(fileName, res.data, {
-        contentType: "audio/mpeg",
+    const audioBuffer = Buffer.from(res.data);
+
+    const { data, error } = await supabase.storage
+      .from('voice-audio')
+      .upload(`audio/${fileName}`, audioBuffer, {
+        contentType: 'audio/mpeg',
         upsert: true,
       });
 
-    if (uploadRes.error) {
-      throw uploadRes.error;
+    if (error) {
+      console.error("🔴 Supabase upload error:", error.message);
+      throw error;
     }
 
-    const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
-    return data.publicUrl;
-  } catch (error) {
-    console.error("🔊 Voice generation or upload error:", error.response?.data || error.message);
-    throw error;
+    // ✅ 公開URL生成
+    const { data: publicUrlData } = supabase.storage
+      .from('voice-audio')
+      .getPublicUrl(`audio/${fileName}`);
+
+    return publicUrlData.publicUrl;
+  } catch (err) {
+    console.error("🔴 Voice generation or upload error:", err.message || err);
+    throw err;
   }
 }
 
