@@ -5,10 +5,8 @@ const { v4: uuidv4 } = require("uuid");
 
 const NIJI_API_KEY = process.env.NIJI_API_KEY;
 const BASE_URL = process.env.BASE_URL || "https://line-bot3.onrender.com";
-const API_URL = "https://api.nijivoice.com/api/v1/tts";
-
-// キャラクターID（例：水瀬 玲奈）
-const DEFAULT_CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
+// ✅ 修正ポイント：ベースURLではなく、キャラIDごとのURLを使う
+const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
 
 async function generateVoice(text) {
   const voiceId = uuidv4();
@@ -16,22 +14,21 @@ async function generateVoice(text) {
   const outputDir = path.join(__dirname, "public", "audio");
   const outputPath = path.join(outputDir, fileName);
 
-  // 念のためディレクトリがなければ作成（Renderでも必要な場合あり）
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
   try {
     const res = await axios.post(
-      API_URL,
+      `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
-        character_id: DEFAULT_CHARACTER_ID,
-        text: text,
-        speed: 1.0,
+        text,
+        format: "mp3"
       },
       {
         headers: {
-          Authorization: `Bearer ${NIJI_API_KEY}`,
+          "x-api-key": NIJI_API_KEY,
+          "Content-Type": "application/json",
         },
         responseType: "stream",
       }
