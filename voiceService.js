@@ -5,7 +5,10 @@ const { v4: uuidv4 } = require("uuid");
 
 const NIJI_API_KEY = process.env.NIJI_API_KEY;
 const BASE_URL = process.env.BASE_URL || "https://line-bot3.onrender.com";
-const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
+
+// キャラクター設定
+const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49"; // 水瀬 玲奈
+const STYLE_ID = 58; // 「素直」スタイル（他に変更可）
 
 async function generateVoice(text) {
   const voiceId = uuidv4();
@@ -13,12 +16,10 @@ async function generateVoice(text) {
   const outputDir = path.join(__dirname, "public", "audio");
   const outputPath = path.join(outputDir, fileName);
 
+  // フォルダがなければ作成
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
-
-  // ✅ テキストをログ出力（デバッグ用）
-  console.log("🎙️ にじボイスへ送信するテキスト:", JSON.stringify(text));
 
   try {
     const res = await axios.post(
@@ -26,14 +27,14 @@ async function generateVoice(text) {
       {
         text,
         format: "mp3",
-        voice_style_id: "58"//素直
+        style_id: STYLE_ID
       },
       {
         headers: {
           "x-api-key": NIJI_API_KEY,
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        responseType: "stream",
+        responseType: "stream"
       }
     );
 
