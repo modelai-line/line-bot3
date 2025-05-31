@@ -70,7 +70,7 @@ async function generateVoice(text) {
     // 🔸 Step4: 公開URLを取得
     const { data: publicUrlData } = supabase.storage
       .from("voice-audio")
-      .getPublicUrl(`audio/${fileName}`);
+      .getPublicUrl(`${fileName}`);
 
     return publicUrlData.publicUrl;
   } catch (err) {
