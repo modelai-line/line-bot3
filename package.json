@@ -12,6 +12,7 @@
     "openai": "^4.33.1",
     "@supabase/supabase-js": "^2.32.0",
     "dotenv": "^16.4.5",
-    "moment-timezone": "^0.5.40"
+    "moment-timezone": "^0.5.40",
+    "uuid": "^9.0.0"
   }
 }
