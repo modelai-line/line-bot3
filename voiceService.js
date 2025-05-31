@@ -6,9 +6,8 @@ const { v4: uuidv4 } = require("uuid");
 const NIJI_API_KEY = process.env.NIJI_API_KEY;
 const BASE_URL = process.env.BASE_URL || "https://line-bot3.onrender.com";
 
-// 水瀬 玲奈 のキャラIDとスタイルID（例：素直）
+// 水瀬玲奈のキャラID
 const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
-const STYLE_ID = 58; // ← style_id は必須！
 
 async function generateVoice(text) {
   const voiceId = uuidv4();
@@ -24,17 +23,17 @@ async function generateVoice(text) {
     const res = await axios.post(
       `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
-        text,
-        format: "mp3",
-        style_id: STYLE_ID,           // ✅ 必須パラメータ
-        speed: 0.9,                   // 推奨値
-        emotional_level: 0.1,         // 推奨値
-        sound_duration: 0.1           // 推奨値
+        script: text,                 // ✅ ← 正しいキー名は script！
+        speed: "1.0",
+        emotionalLevel: "0.1",
+        soundDuration: "0.1",
+        format: "mp3"
       },
       {
         headers: {
           "x-api-key": NIJI_API_KEY,
           "Content-Type": "application/json",
+          Accept: "application/json"
         },
         responseType: "stream",
       }
