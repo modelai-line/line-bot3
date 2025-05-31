@@ -58,7 +58,7 @@ async function generateReply(userId, userMessage, userName) {
         .update({ gomen_sent: true })
         .eq('user_id', userId)
         .eq('date', today);
-      return "ごめんね、今日はもう話せなから。";
+      return "ごめんね、今日はもう、話せないから。";
     } else {
       return null;
     }
