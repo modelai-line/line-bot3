@@ -1,28 +1,46 @@
 const axios = require("axios");
-const { v4: uuidv4 } = require("uuid");
 const { createClient } = require("@supabase/supabase-js");
 
+// Supabase初期化
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-//水瀬 玲奈
-//const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
-//const STYLE_ID = 58;//素直
 
-//ラピス
-//const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
-//const STYLE_ID = 52;//甘え
+/* 🔵 キャラクター設定
 
-//高宮 涼香
+// 水瀬 玲奈
+// const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
+// const STYLE_ID = 58; // 素直
+
+// ラピス
+// const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
+// const STYLE_ID = 52; // 甘え
+
+// 高宮 涼香（現在使用中）
+*/
 const CHARACTER_ID = "294eeefe-f46c-45a6-9e5a-e6a3b3d6eb6e";
-const STYLE_ID = 25;//優しい
+const STYLE_ID = 25; // 優しい
 
-async function generateVoice(text) {
-  const fileName = `${uuidv4()}.mp3`;
+// 🔧 ファイル名を「YYYYMMDD-HHMM-ユーザー名.mp3」形式にする
+function formatFileName(userName) {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  const safeUserName = userName.replace(/[^\w\-]/g, "_");
+  return `${yyyy}${mm}${dd}-${hh}${min}-${safeUserName}.mp3`;
+}
+
+// 🔊 音声生成関数
+async function generateVoice(text, userName = "user") {
+  const fileName = formatFileName(userName);
+  const estimatedDuration = Math.min(Math.ceil(text.length * 120), 15000); // 最大15秒
 
   try {
-    // 🔸 Step1: 音声生成リクエスト（JSON返却）
+    // Step 1: にじボイスAPIへリクエスト
     const res = await axios.post(
       `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
@@ -41,23 +59,18 @@ async function generateVoice(text) {
       }
     );
 
-    const audioUrl = res.data.generatedVoice.audioFileUrl;
-    if (!audioUrl) {
-      throw new Error("🎧 audioFileUrl が取得できませんでした。");
-    }
+    const audioUrl = res.data.generatedVoice?.audioFileUrl;
+    if (!audioUrl) throw new Error("🎧 audioFileUrl が取得できませんでした。");
 
-    // 🔸 Step2: audioFileUrlから音声をGETで取得
-    const audioRes = await axios.get(audioUrl, {
-      responseType: "arraybuffer",
-    });
-
+    // Step 2: 音声データを取得
+    const audioRes = await axios.get(audioUrl, { responseType: "arraybuffer" });
     const audioBuffer = Buffer.from(audioRes.data);
     console.log("🎧 Downloaded audioBuffer size:", audioBuffer.length);
 
-    // 🔸 Step3: Supabaseにアップロード
+    // Step 3: Supabaseにアップロード
     const { error: uploadError } = await supabase.storage
       .from("voice-audio")
-      .upload(`${fileName}`, audioBuffer, {
+      .upload(fileName, audioBuffer, {
         contentType: "audio/mpeg",
         upsert: true,
       });
@@ -67,12 +80,15 @@ async function generateVoice(text) {
       throw uploadError;
     }
 
-    // 🔸 Step4: 公開URLを取得
+    // Step 4: 公開URLを取得
     const { data: publicUrlData } = supabase.storage
       .from("voice-audio")
-      .getPublicUrl(`${fileName}`);
+      .getPublicUrl(fileName);
 
-    return publicUrlData.publicUrl;
+    return {
+      url: publicUrlData.publicUrl,
+      duration: estimatedDuration,
+    };
   } catch (err) {
     console.error("🔴 generateVoice error:", err.message || err);
     throw err;
