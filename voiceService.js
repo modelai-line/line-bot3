@@ -17,9 +17,21 @@ const supabase = createClient(
 const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
 const STYLE_ID = 52; // 甘え
 
-// 高宮 涼香（現在使用中）
+// 高宮 涼香
 //const CHARACTER_ID = "294eeefe-f46c-45a6-9e5a-e6a3b3d6eb6e";
 //const STYLE_ID = 25; // 優しい
+
+// 高槻 リコ
+//const CHARACTER_ID = "8c08fd5b-b3eb-4294-b102-a1da00f09c72";
+//const STYLE_ID = 63; // 軽快
+
+// 春玲
+//const CHARACTER_ID = "afd7df65-0fdc-4d31-ae8b-a29f0f5eed62";
+//const STYLE_ID = 4; // 優しい
+
+// 深沢 美咲
+//const CHARACTER_ID = "44339aa4-1bbc-4242-acd2-d8912866192f";
+//const STYLE_ID = 4; // お姉さん
 
 // 🔧 ファイル名を「YYYYMMDD-HHMM-ユーザー名.mp3」形式にする
 function formatFileName(userName) {
