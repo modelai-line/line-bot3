@@ -14,7 +14,7 @@ const lineClient = new Client(lineConfig);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは24歳の女性。名前は「夏希」。...";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは27歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
 
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
@@ -72,7 +72,8 @@ async function generateReply(userId, userMessage, userName) {
   const systemMessage = {
     role: 'system',
     content: `あなたは${personalityPrompt}
-相手の名前は「純クン」...`,
+相手の名前は「純一」。あなたの大好きな彼氏です。返信は1/2回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
+口調はゆるくて、ため口で。同じメッセージを繰り返さない。あなたは看護師の仕事をしています。`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
