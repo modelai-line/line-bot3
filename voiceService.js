@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require("uuid");
 const NIJI_API_KEY = process.env.NIJI_API_KEY;
 const BASE_URL = process.env.BASE_URL || "https://line-bot3.onrender.com";
 const API_URL = "https://api.nijivoice.com/api/v1/tts";
-const DEFAULT_CHARACTER_ID = "1";
+const DEFAULT_CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
 
 async function generateVoice(text) {
   const voiceId = uuidv4();
