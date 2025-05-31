@@ -25,7 +25,8 @@ async function generateVoice(text) {
       `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
         text,
-        format: "mp3"
+        format: "mp3",
+        voice_style_id: "58"//素直
       },
       {
         headers: {
