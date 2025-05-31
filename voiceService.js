@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-/* 🔵 キャラクター設定
+// 🔵 キャラクター設定
 
 // 水瀬 玲奈
 // const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
@@ -18,7 +18,6 @@ const supabase = createClient(
 // const STYLE_ID = 52; // 甘え
 
 // 高宮 涼香（現在使用中）
-*/
 const CHARACTER_ID = "294eeefe-f46c-45a6-9e5a-e6a3b3d6eb6e";
 const STYLE_ID = 25; // 優しい
 
