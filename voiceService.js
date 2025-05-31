@@ -3,14 +3,16 @@ const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 
-// 環境変数から取得（Renderに登録されている）
+// 環境変数に BASE_URL をRenderで追加しておくと便利
 const NIJI_API_KEY = process.env.NIJI_API_KEY;
+const BASE_URL = process.env.BASE_URL || "https://line-bot3.onrender.com";
 const API_URL = "https://api.nijivoice.com/api/v1/tts";
 const DEFAULT_CHARACTER_ID = "1";
 
 async function generateVoice(text) {
   const voiceId = uuidv4();
-  const outputPath = path.join(__dirname, "public", "audio", `${voiceId}.mp3`);
+  const fileName = `${voiceId}.mp3`;
+  const outputPath = path.join(__dirname, "public", "audio", fileName);
 
   const res = await axios.post(
     API_URL,
@@ -34,7 +36,7 @@ async function generateVoice(text) {
     writer.on("error", reject);
   });
 
-  return `/audio/${voiceId}.mp3`;
+  return `${BASE_URL}/audio/${fileName}`;
 }
 
 module.exports = { generateVoice };
