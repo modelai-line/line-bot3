@@ -12,11 +12,10 @@ const STYLE_ID = 58;
 
 async function generateVoice(text) {
   const fileName = `${uuidv4()}.mp3`;
-  const storagePath = `audio/${fileName}`; // audio/ フォルダ付き
 
   try {
-    // 🎯 正しい TTS API エンドポイント + パラメーター
-    const response = await axios.post(
+    // 🔸 Step1: 音声生成リクエスト（JSON返却）
+    const res = await axios.post(
       `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
         script: text,
@@ -24,44 +23,50 @@ async function generateVoice(text) {
         emotionalLevel: "0.1",
         soundDuration: "0.1",
         format: "mp3",
-        styleId: STYLE_ID,
+        style_id: STYLE_ID,
       },
       {
         headers: {
           "x-api-key": process.env.NIJI_API_KEY,
           "Content-Type": "application/json",
         },
-        responseType: "arraybuffer", // 🔥 超重要：mp3バイナリで受け取る
       }
     );
 
-    const audioBuffer = Buffer.from(response.data);
-
-    // ⚠️ 再生できない原因：バッファサイズが小さすぎる
-    if (audioBuffer.length < 1000) {
-      throw new Error("生成された音声が不正です（サイズが小さすぎる）");
+    const audioUrl = res.data.generatedVoice.audioFileUrl;
+    if (!audioUrl) {
+      throw new Error("🎧 audioFileUrl が取得できませんでした。");
     }
 
+    // 🔸 Step2: audioFileUrlから音声をGETで取得
+    const audioRes = await axios.get(audioUrl, {
+      responseType: "arraybuffer",
+    });
+
+    const audioBuffer = Buffer.from(audioRes.data);
+    console.log("🎧 Downloaded audioBuffer size:", audioBuffer.length);
+
+    // 🔸 Step3: Supabaseにアップロード
     const { error: uploadError } = await supabase.storage
       .from("voice-audio")
-      .upload(storagePath, audioBuffer, {
+      .upload(`audio/${fileName}`, audioBuffer, {
         contentType: "audio/mpeg",
         upsert: true,
       });
 
     if (uploadError) {
-      console.error("🛑 Supabase upload error:", uploadError.message);
+      console.error("🔴 Supabase upload error:", uploadError.message);
       throw uploadError;
     }
 
-    // 🔗 公開URLを取得
-    const { data: publicData } = supabase.storage
+    // 🔸 Step4: 公開URLを取得
+    const { data: publicUrlData } = supabase.storage
       .from("voice-audio")
-      .getPublicUrl(storagePath);
+      .getPublicUrl(`audio/${fileName}`);
 
-    return publicData.publicUrl;
+    return publicUrlData.publicUrl;
   } catch (err) {
-    console.error("🛑 Voice generation or upload error:", err.message || err);
+    console.error("🔴 generateVoice error:", err.message || err);
     throw err;
   }
 }
