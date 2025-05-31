@@ -10,8 +10,8 @@ const supabase = createClient(
 // 🔵 キャラクター設定
 
 // 水瀬 玲奈
-// const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
-// const STYLE_ID = 58; // 素直
+const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
+const STYLE_ID = 58; // 素直
 
 // ラピス
 //const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
@@ -28,10 +28,6 @@ const supabase = createClient(
 // 春玲
 //const CHARACTER_ID = "afd7df65-0fdc-4d31-ae8b-a29f0f5eed62";
 //const STYLE_ID = 4; // 優しい
-
-// 深沢 美咲
-const CHARACTER_ID = "44339aa4-1bbc-4242-acd2-d8912866192f";
-const STYLE_ID = 4; // お姉さん
 
 // 🔧 ファイル名を「YYYYMMDD-HHMM-ユーザー名.mp3」形式にする
 function formatFileName(userName) {
