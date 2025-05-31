@@ -62,9 +62,9 @@ async function generateReply(userId, userMessage, userName) {
     } else {
       return null;
     }
- // } else if (currentTotal >= 2800) {
- //   await saveMessage(userId, 'assistant', "実はこれから用事があるの。");
- // }
+ } else if (currentTotal >= 900) {
+   await saveMessage(userId, 'assistant', "実はこれから用事があるの。");
+ }
 
   await saveMessage(userId, 'user', userMessage);
 
