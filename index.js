@@ -1,10 +1,9 @@
-// Ver.1.3 Supabase Storage対応
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
-const { generateVoice } = require('./voiceService');
+const { generateVoice } = require('./voiceService'); // ✅ 音声対応
 
 const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
@@ -24,7 +23,6 @@ async function getRecentMessages(userId, limit = 5) {
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);
-
   if (error) {
     console.error('Supabase getRecentMessages error:', error);
     return [];
@@ -36,7 +34,6 @@ async function saveMessage(userId, role, content) {
   const { error } = await supabase
     .from('chat_messages')
     .insert([{ user_id: userId, role, content }]);
-
   if (error) {
     console.error('Supabase saveMessage error:', error);
   }
@@ -44,7 +41,6 @@ async function saveMessage(userId, role, content) {
 
 async function generateReply(userId, userMessage, userName) {
   const today = new Date().toISOString().split('T')[0];
-
   const { data: usageData } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent')
@@ -72,16 +68,16 @@ async function generateReply(userId, userMessage, userName) {
 
   await saveMessage(userId, 'user', userMessage);
 
+  const promptToUse = personalityPrompt;
+  const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
     role: 'system',
-    content: `あなたは${personalityPrompt}
-相手の名前は「純くん」。あなたの大好きな彼氏です。返信は1/2回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
+    content: `あなたは${promptToUse}
+相手の名前は「純クン」。あなたの大好きな彼氏です。返信は1/2回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
 口調はゆるくて、ため口で。同じメッセージを繰り返さない。`,
   };
 
-  const recentMessages = await getRecentMessages(userId, 10);
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
-
   const completion = await openai.chat.completions.create({
     model: 'gpt-3.5-turbo',
     messages,
@@ -141,17 +137,34 @@ async function handleLineWebhook(req, res) {
       try {
         const voiceUrl = await generateVoice(replyText);
 
-        return lineClient.replyMessage(event.replyToken, [
-          {
-            type: 'text',
-            text: replyText,
-          },
-          {
-            type: 'audio',
-            originalContentUrl: voiceUrl,
-            duration: 4000,
-          },
-        ]);
+        // 🔁 送信スタイル切り替え（必要な return だけ残して、他はコメントアウト）
+
+        // --- 音声だけ ---
+        return lineClient.replyMessage(event.replyToken, {
+          type: 'audio',
+          originalContentUrl: voiceUrl,
+          duration: 4000,
+        });
+
+        // --- テキストだけ ---
+        // return lineClient.replyMessage(event.replyToken, {
+        //   type: 'text',
+        //   text: replyText,
+        // });
+
+        // --- 両方（テキスト + 音声） ---
+        // return lineClient.replyMessage(event.replyToken, [
+        //   {
+        //     type: 'text',
+        //     text: replyText,
+        //   },
+        //   {
+        //     type: 'audio',
+        //     originalContentUrl: voiceUrl,
+        //     duration: 4000,
+        //   },
+        // ]);
+
       } catch (e) {
         console.error("🔊 generateVoice failed:", e.message);
         return lineClient.replyMessage(event.replyToken, {
@@ -173,6 +186,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use("/audio", express.static(path.join(__dirname, "public/audio")));
 app.post('/webhook', handleLineWebhook);
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
