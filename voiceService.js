@@ -24,7 +24,7 @@ async function generateVoice(text) {
         emotionalLevel: "0.1",
         soundDuration: "0.1",
         format: "mp3",
-        style_id: STYLE_ID,
+        styleId: STYLE_ID,
       },
       {
         headers: {
