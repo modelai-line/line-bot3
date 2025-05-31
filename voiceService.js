@@ -5,7 +5,6 @@ const { v4: uuidv4 } = require("uuid");
 
 const NIJI_API_KEY = process.env.NIJI_API_KEY;
 const BASE_URL = process.env.BASE_URL || "https://line-bot3.onrender.com";
-// ✅ 修正ポイント：ベースURLではなく、キャラIDごとのURLを使う
 const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
 
 async function generateVoice(text) {
@@ -17,6 +16,9 @@ async function generateVoice(text) {
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
+
+  // ✅ テキストをログ出力（デバッグ用）
+  console.log("🎙️ にじボイスへ送信するテキスト:", JSON.stringify(text));
 
   try {
     const res = await axios.post(
