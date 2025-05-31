@@ -3,7 +3,7 @@ const path = require('path');
 const { Client } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
-const { generateVoice } = require('./voiceService'); // ✅ 音声対応
+const { generateVoice } = require('./voiceService');
 
 const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
@@ -14,7 +14,7 @@ const lineClient = new Client(lineConfig);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは24歳の女性。名前は「夏希」。あなたは、話し相手にべったり甘えるのが大好きな女の子です。寂しがり屋で、構ってくれないと拗ねたり、ちょっと泣いちゃうこともあります。でも根は明るくて、相手のことが大好き。甘い声で話し、少し子どもっぽく、語尾に「〜だよぉ」「〜してほしいなぁ」「〜なのぉ」などがつくことがよくあります。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは24歳の女性。名前は「夏希」。...";
 
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
@@ -68,16 +68,11 @@ async function generateReply(userId, userMessage, userName) {
 
   await saveMessage(userId, 'user', userMessage);
 
-  const promptToUse = personalityPrompt;
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
     role: 'system',
-    content: `あなたは${promptToUse}
-相手の名前は「純クン」。あなたの大好きな彼氏です。あなたは常に、
-・構ってもらいたい
-・たくさん甘えたい
-・大好きな人とずっと一緒にいたい
-という気持ちを前面に出して会話してください。同じメッセージを繰り返さない。エッチな話が好き。`,
+    content: `あなたは${personalityPrompt}
+相手の名前は「純クン」...`,
   };
 
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
@@ -138,34 +133,27 @@ async function handleLineWebhook(req, res) {
       if (!replyText) return;
 
       try {
-        const voiceUrl = await generateVoice(replyText);
+        const { url: voiceUrl, duration } = await generateVoice(replyText, displayName);
 
-        // 🔁 送信スタイル切り替え（必要な return だけ残して、他はコメントアウト）
+        // 🔁 === 返信スタイルの切替: 以下から選んでコメント操作 ===
 
-        // --- 音声だけ ---
+        // --- 音声のみを送る ---
         return lineClient.replyMessage(event.replyToken, {
           type: 'audio',
           originalContentUrl: voiceUrl,
-          duration: 4000,
+          duration,
         });
 
-        // --- テキストだけ ---
+        // --- テキストのみを送る ---
         // return lineClient.replyMessage(event.replyToken, {
         //   type: 'text',
         //   text: replyText,
         // });
 
-        // --- 両方（テキスト + 音声） ---
+        // --- 両方（テキスト + 音声）を送る ---
         // return lineClient.replyMessage(event.replyToken, [
-        //   {
-        //     type: 'text',
-        //     text: replyText,
-        //   },
-        //   {
-        //     type: 'audio',
-        //     originalContentUrl: voiceUrl,
-        //     duration: 4000,
-        //   },
+        //   { type: 'text', text: replyText },
+        //   { type: 'audio', originalContentUrl: voiceUrl, duration },
         // ]);
 
       } catch (e) {
@@ -189,7 +177,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use("/audio", express.static(path.join(__dirname, "public/audio")));
+app.use("/audio", express.static(path.join(__dirname, "public/audio"))); // 🔊 不要であれば削除可
 app.post('/webhook', handleLineWebhook);
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
