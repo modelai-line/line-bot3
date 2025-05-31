@@ -14,12 +14,12 @@ const supabase = createClient(
 // const STYLE_ID = 58; // 素直
 
 // ラピス
-// const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
-// const STYLE_ID = 52; // 甘え
+const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
+const STYLE_ID = 52; // 甘え
 
 // 高宮 涼香（現在使用中）
-const CHARACTER_ID = "294eeefe-f46c-45a6-9e5a-e6a3b3d6eb6e";
-const STYLE_ID = 25; // 優しい
+//const CHARACTER_ID = "294eeefe-f46c-45a6-9e5a-e6a3b3d6eb6e";
+//const STYLE_ID = 25; // 優しい
 
 // 🔧 ファイル名を「YYYYMMDD-HHMM-ユーザー名.mp3」形式にする
 function formatFileName(userName) {
