@@ -57,7 +57,7 @@ async function generateVoice(text) {
     // 🔸 Step3: Supabaseにアップロード
     const { error: uploadError } = await supabase.storage
       .from("voice-audio")
-      .upload(`audio/${fileName}`, audioBuffer, {
+      .upload(`${fileName}`, audioBuffer, {
         contentType: "audio/mpeg",
         upsert: true,
       });
