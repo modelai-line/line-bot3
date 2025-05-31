@@ -1,29 +1,21 @@
-// Ver.1.0 完成版
-// 必要なライブラリを読み込み
+// Ver.1.1 音声対応版
 const express = require('express');
+const path = require('path'); // ✅ ← 追加
 const { Client } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
 
-// LINE Messaging APIの設定
 const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET,
 };
 
-// LINEクライアントのインスタンス作成
 const lineClient = new Client(lineConfig);
-
-// Supabaseクライアントの作成（DB連携）
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-
-// OpenAIのインスタンス作成（ChatGPT API）
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// デフォルトのキャラクター性格プロンプト（環境変数または固定文）
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは27歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
 
-// 最近のメッセージ履歴をSupabaseから取得
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
     .from('chat_messages')
@@ -36,10 +28,9 @@ async function getRecentMessages(userId, limit = 5) {
     console.error('Supabase getRecentMessages error:', error);
     return [];
   }
-  return data.reverse(); // 時系列を正順にする
+  return data.reverse();
 }
 
-// メッセージをSupabaseに保存
 async function saveMessage(userId, role, content) {
   const { error } = await supabase
     .from('chat_messages')
@@ -49,11 +40,8 @@ async function saveMessage(userId, role, content) {
   }
 }
 
-// ChatGPTを使って返信を生成
 async function generateReply(userId, userMessage, userName) {
   const today = new Date().toISOString().split('T')[0];
-
-  // 今日の使用量をチェック（gomen_sent も取得）
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent')
@@ -64,7 +52,6 @@ async function generateReply(userId, userMessage, userName) {
   const currentTotal = usageData ? usageData.total_chars : 0;
   const gomenSent = usageData ? usageData.gomen_sent : false;
 
-  // 上限チェック（gomen_sent 未送信なら送信＋フラグ立てる）
   if (currentTotal >= 3000) {
     if (!gomenSent) {
       await supabase
@@ -72,10 +59,9 @@ async function generateReply(userId, userMessage, userName) {
         .update({ gomen_sent: true })
         .eq('user_id', userId)
         .eq('date', today);
-
       return "ごめんね、今日はもう話せなから。";
     } else {
-      return null; // すでに送信済みなら沈黙
+      return null;
     }
   } else if (currentTotal >= 2800) {
     await saveMessage(userId, 'assistant', "実はこれから用事があるの。");
@@ -83,13 +69,11 @@ async function generateReply(userId, userMessage, userName) {
 
   await saveMessage(userId, 'user', userMessage);
 
-  // Supabaseから人格プロンプトを取得せず、常に固定のものを使う
   const promptToUse = personalityPrompt;
 
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
     role: 'system',
-    //デフォルトの名前なら「${userName}」と入れる
     content: `あなたは${promptToUse}
 相手の名前は「純一」。あなたの大好きな彼氏です。返信は1/2回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
 口調はゆるくて、ため口で。同じメッセージを繰り返さない。`,
@@ -120,7 +104,6 @@ async function generateReply(userId, userMessage, userName) {
   return botReply;
 }
 
-// LINEのWebhookを処理する関数
 async function handleLineWebhook(req, res) {
   try {
     const events = req.body.events;
@@ -131,10 +114,9 @@ async function handleLineWebhook(req, res) {
     const promises = events.map(async (event) => {
       if (event.type !== 'message' || event.message.type !== 'text') return;
 
-      const userId = event.source.userId; // ここで userId を取得
+      const userId = event.source.userId;
       const userMessage = event.message.text.trim();
 
-      // ここで message_targets テーブルに upsert する処理を入れると良いです
       await supabase
         .from('message_targets')
         .upsert([{ user_id: userId, is_active: true }])
@@ -146,7 +128,6 @@ async function handleLineWebhook(req, res) {
           }
         });
 
-      // LINEのdisplayNameを取得
       let displayName = 'あなた';
       try {
         const profile = await lineClient.getProfile(userId);
@@ -173,15 +154,17 @@ async function handleLineWebhook(req, res) {
   }
 }
 
-// Expressアプリの設定
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// ✅ public/audio フォルダを外部公開（音声ファイル配信用）
+app.use("/audio", express.static(path.join(__dirname, "public/audio")));
+
 app.post('/webhook', handleLineWebhook);
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
-// サーバー起動
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
