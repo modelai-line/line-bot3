@@ -1,62 +1,57 @@
+// ✅ Supabase Storage を使った音声保存版
 const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
 const { v4: uuidv4 } = require("uuid");
+const { createClient } = require("@supabase/supabase-js");
 
 const NIJI_API_KEY = process.env.NIJI_API_KEY;
-const BASE_URL = process.env.BASE_URL || "https://line-bot3.onrender.com";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// 水瀬玲奈のキャラID
+const BUCKET_NAME = "voice-audio";
 const CHARACTER_ID = "75ad89de-03df-419f-96f0-02c061609d49";
-const STYLE_ID = 58; // 例：「素直」
+const STYLE_ID = 58; // 例："素直"
 
 async function generateVoice(text) {
-  const voiceId = uuidv4();
-  const fileName = `${voiceId}.mp3`;
-  const outputPath = path.join(__dirname, "public", "audio", fileName);
+  const fileName = `${uuidv4()}.mp3`;
 
   try {
-    // 1. 音声の生成リクエスト（エンコード済mp3）
     const res = await axios.post(
-      `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-encoded-voice`,
+      `https://api.nijivoice.com/api/platform/v1/voice-actors/${CHARACTER_ID}/generate-voice`,
       {
         script: text,
-        speed: "1.0",
+        speed: "0.9",
         emotionalLevel: "0.1",
         soundDuration: "0.1",
         format: "mp3",
-        styleId: STYLE_ID, // ✅ ここが追加点！
+        style_id: STYLE_ID
       },
       {
         headers: {
           "x-api-key": NIJI_API_KEY,
           "Content-Type": "application/json",
-          "Accept": "application/json",
         },
-        responseType: "stream",
+        responseType: "arraybuffer",
       }
     );
 
-    // 2. 保存処理
-    await new Promise((resolve, reject) => {
-      const writer = fs.createWriteStream(outputPath);
-      res.data.pipe(writer);
-      writer.on("finish", () => {
-        console.log("✅ 音声ファイル保存成功:", outputPath);
-        resolve();
+    const uploadRes = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, res.data, {
+        contentType: "audio/mpeg",
+        upsert: true,
       });
-      writer.on("error", (err) => {
-        console.error("❌ 音声ファイル保存失敗:", err);
-        reject(err);
-      });
-    });
 
-    return `${BASE_URL}/audio/${fileName}`;
+    if (uploadRes.error) {
+      throw uploadRes.error;
+    }
+
+    const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+    return data.publicUrl;
   } catch (error) {
-    console.error("🔊 Voice generation error:", error.response?.data || error.message);
+    console.error("🔊 Voice generation or upload error:", error.response?.data || error.message);
     throw error;
   }
 }
-
 
 module.exports = { generateVoice };
