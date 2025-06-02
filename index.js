@@ -66,21 +66,25 @@ async function generateReply(userId, userMessage, userName) {
   const charLimit = usageData?.char_limit || 1000;
 
   // 🚫 文字数制限チェック
-  if (currentTotal >= charLimit) {
-    if (!gomenSent) {
-      await supabase
-        .from('daily_usage')
-        .update({ gomen_sent: true })
-        .eq('user_id', userId)
-        .eq('date', today);
-     const shortUrl = await createShortCheckoutLink(userId);
-    return `ごめんね、無料分を使い切っちゃった💦 チケットはこちら👉 ${shortUrl}`;
-    } else {
-      return null;
-    }
-  } else if (currentTotal >= charLimit - 100) {
-    await saveMessage(userId, 'assistant', "あとちょっとで今日の分終わっちゃうかも…！");
+ if (currentTotal >= charLimit) {
+  if (!gomenSent) {
+    // 👇 リミット超過時：短縮URLを作成して送る
+    const { createShortCheckoutLink } = require('./createShortCheckoutLink');
+    const shortLink = await createShortCheckoutLink(userId);
+
+    // gomen_sent = true にして、2回目以降は何も言わない
+    await supabase
+      .from('daily_usage')
+      .update({ gomen_sent: true })
+      .eq('user_id', userId)
+      .eq('date', today);
+
+    return `ごめんね、無料分を使い切っちゃった💦 続きはチケット買ってね 👉 ${shortLink}`;
+  } else {
+    return null; // 2回目以降は黙る
   }
+}
+
 
   // 💬 会話履歴の保存
   await saveMessage(userId, 'user', userMessage);
