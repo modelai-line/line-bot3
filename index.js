@@ -151,7 +151,8 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const userId = session.metadata?.user_id;
-    const quantity = session.amount_total / 128000;
+    const quantity = session.amount_total / 1280; // ← 1280円ごとに1単位
+    const newLimit = (data?.char_limit || 1000) + quantity * 10000;
 
     if (userId) {
       const today = new Date().toISOString().split('T')[0];
