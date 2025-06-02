@@ -257,10 +257,6 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
 // 🔘 動作確認用のGETルート
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
-
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const bodyParser = require('body-parser');
-
 // Stripe Webhook専用エンドポイント（署名検証あり）
 app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
