@@ -41,33 +41,44 @@ async function saveMessage(userId, role, content) {
 
 async function generateReply(userId, userMessage, userName) {
   const today = new Date().toISOString().split('T')[0];
-  const { data: usageData } = await supabase
+
+  // 🔍 今日の usage データ取得
+  const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
-    .select('total_chars, gomen_sent')
+    .select('total_chars, gomen_sent, char_limit')
     .eq('user_id', userId)
     .eq('date', today)
     .single();
 
-  const currentTotal = usageData ? usageData.total_chars : 0;
-  const gomenSent = usageData ? usageData.gomen_sent : false;
+  if (usageError && usageError.code !== 'PGRST116') {
+    console.error('❌ Supabase daily_usage fetch error:', usageError.message);
+    return "ちょっとエラーが出ちゃったみたい…ごめんね💦";
+  }
 
-  if (currentTotal >= 1000) {
+  const currentTotal = usageData?.total_chars || 0;
+  const gomenSent = usageData?.gomen_sent || false;
+  const charLimit = usageData?.char_limit || 1000;
+
+  // 🧱 無料・有料制限チェック
+  if (currentTotal >= charLimit) {
     if (!gomenSent) {
       await supabase
         .from('daily_usage')
         .update({ gomen_sent: true })
         .eq('user_id', userId)
         .eq('date', today);
-      return "ごめんね、ここから先は有料なんだ。URL送るからそこから来てね。https://natsuki-asmr.com";
+      return "ごめんね、無料分を使い切っちゃった💦 続きはここからチケット買ってね👉 https://natsuki-asmr.com/payment";
     } else {
-      return null;
+      return null; // 応答しない
     }
- } else if (currentTotal >= 900) {
-   await saveMessage(userId, 'assistant', "実はこれから用事があるの。");
- }
+  } else if (currentTotal >= charLimit - 100) {
+    await saveMessage(userId, 'assistant', "あとちょっとで今日の分終わっちゃうかも…！");
+  }
 
+  // 💬 ユーザー発言を保存
   await saveMessage(userId, 'user', userMessage);
 
+  // ⏪ 履歴取得
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
     role: 'system',
@@ -85,20 +96,24 @@ async function generateReply(userId, userMessage, userName) {
   });
 
   const botReply = completion.choices[0].message.content.trim();
+
+  // 💬 Bot返信保存
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
-  await supabase.from('daily_usage').upsert([
-    {
-      user_id: userId,
-      date: today,
-      total_chars: currentTotal + totalNewChars,
-      gomen_sent: false,
-    },
-  ]);
+
+  // 🔁 usage 更新（char_limitそのまま維持）
+  await supabase.from('daily_usage').upsert([{
+    user_id: userId,
+    date: today,
+    total_chars: currentTotal + totalNewChars,
+    char_limit: charLimit,
+    gomen_sent: false,
+  }]);
 
   return botReply;
 }
+
 
 async function handleLineWebhook(req, res) {
   try {
