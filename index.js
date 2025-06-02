@@ -257,6 +257,67 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
 // 🔘 動作確認用のGETルート
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const bodyParser = require('body-parser');
+
+// Stripe Webhook専用エンドポイント（署名検証あり）
+app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error('❌ Stripe webhook verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // 💰 Checkout成功時
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+
+    // メタデータから user_id を取得
+    const userId = session.metadata?.user_id;
+    const quantity = session.amount_total / 1280_00; // ※価格に応じて文字数計算（1280円ごとに1）
+
+    if (userId) {
+      const today = new Date().toISOString().split('T')[0];
+
+      // `daily_usage` に追加 or 更新
+      const { data, error } = await supabase
+        .from('daily_usage')
+        .select('char_limit')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .single();
+
+      const newLimit = (data?.char_limit || 1000) + quantity * 10000;
+
+      await supabase
+        .from('daily_usage')
+        .upsert([
+          {
+            user_id: userId,
+            date: today,
+            char_limit: newLimit,
+            gomen_sent: false,
+          },
+        ]);
+
+      console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
+    }
+  }
+
+  res.status(200).send('OK');
+});
+
+
+
 // 🚀 サーバー起動
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
