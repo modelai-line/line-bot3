@@ -79,7 +79,7 @@ async function generateReply(userId, userMessage, userName) {
       .eq('user_id', userId)
       .eq('date', today);
 
-    return `ごめんね、無料分を使い切っちゃった💦 続きはチケット買ってね 👉 ${shortLink}`;
+    return `ごめんね、無料分は終わりだよ。また出会えたら、「夏希」って呼んでくれる？ 👉 ${shortLink}`;
   } else {
     return null; // 2回目以降は黙る
   }
