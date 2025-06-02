@@ -8,45 +8,37 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 🔑 ランダムな短縮コードを生成（例：6桁の英数字）
+// 🔑 ランダムな短縮コードを生成（6桁の英数字）
 function generateShortCode() {
-  return crypto.randomBytes(3).toString('hex'); // 6文字
+  return crypto.randomBytes(3).toString('hex'); // 例: "a1b2c3"
 }
 
 // 🎟 ユーザーごとの Stripe Checkout リンクを作成し、短縮URLを返す関数
 async function createShortCheckoutLink(userId) {
   try {
     const baseUrl = process.env.BASE_URL;
-
-    // 🔒 必須チェック
     if (!baseUrl) {
       console.error('❌ BASE_URL が設定されていません');
       return null;
     }
-    if (!userId) {
-      console.error('❌ userId が未定義のまま createShortCheckoutLink に渡されました');
-      return null;
-    }
 
     console.log('🎫 Stripe セッション作成開始: userId =', userId);
-    // 1. StripeのCheckoutセッションを作成
-   const session = await stripe.checkout.sessions.create({
-  mode: 'payment',
-  line_items: [
-    {
-      price: process.env.STRIPE_PRICE_ID,
-      quantity: 1,
-    },
-  ],
-  success_url: `${baseUrl}/success`,
-  cancel_url: `${baseUrl}/cancel`,
-  payment_intent_data: {
-    metadata: {
-      user_id: userId,
-    },
-  },
-});
 
+    // 1. StripeのCheckoutセッションを作成
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [
+        {
+          price: process.env.STRIPE_PRICE_ID, // StripeのPrice IDを指定
+          quantity: 1,
+        },
+      ],
+      success_url: `${baseUrl}/success`,
+      cancel_url: `${baseUrl}/cancel`,
+      metadata: {
+        user_id: userId, // ✅ Webhook用に埋め込む
+      },
+    });
 
     const checkoutUrl = session.url;
     const shortCode = generateShortCode();
