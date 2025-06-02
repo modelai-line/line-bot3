@@ -6,6 +6,7 @@ const OpenAI = require('openai');
 const { generateVoice } = require('./voiceService');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // 🔑 Stripe初期化（APIキー）
 const bodyParser = require('body-parser');
+const { createShortCheckoutLink } = require('./createShortCheckoutLink');
 
 const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
