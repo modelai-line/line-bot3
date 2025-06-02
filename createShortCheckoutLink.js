@@ -28,6 +28,7 @@ async function createShortCheckoutLink(userId) {
       return null;
     }
 
+    console.log('🎫 Stripe セッション作成開始: userId =', userId);
     // 1. StripeのCheckoutセッションを作成
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
