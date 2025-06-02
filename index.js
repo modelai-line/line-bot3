@@ -69,7 +69,6 @@ async function generateReply(userId, userMessage, userName) {
  if (currentTotal >= charLimit) {
   if (!gomenSent) {
     // 👇 リミット超過時：短縮URLを作成して送る
-    const { createShortCheckoutLink } = require('./createShortCheckoutLink');
     const shortLink = await createShortCheckoutLink(userId);
 
     // gomen_sent = true にして、2回目以降は何も言わない
