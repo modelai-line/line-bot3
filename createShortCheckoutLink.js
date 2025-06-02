@@ -46,9 +46,10 @@ async function createShortCheckoutLink(userId) {
     ]);
 
     if (error) {
-      console.error('❌ Supabase insert error:', error.message);
+      console.error('❌ Supabase insert error:', error.message || error);
       return null;
     }
+
 
     // 3. 短縮URLを返す（サイトURLを変えてください）
     return `https://natsuki-asmr.com/s/${shortCode}`;
