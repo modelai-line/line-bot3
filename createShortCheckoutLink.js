@@ -30,20 +30,23 @@ async function createShortCheckoutLink(userId) {
 
     console.log('🎫 Stripe セッション作成開始: userId =', userId);
     // 1. StripeのCheckoutセッションを作成
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [
-        {
-          price: process.env.STRIPE_PRICE_ID,
-          quantity: 1,
-        },
-      ],
-      success_url: `${baseUrl}/success`,
-      cancel_url: `${baseUrl}/cancel`,
-      metadata: {
-        user_id: userId, // ✅ Webhookで識別するための重要データ
-      },
-    });
+   const session = await stripe.checkout.sessions.create({
+  mode: 'payment',
+  line_items: [
+    {
+      price: process.env.STRIPE_PRICE_ID,
+      quantity: 1,
+    },
+  ],
+  success_url: `${baseUrl}/success`,
+  cancel_url: `${baseUrl}/cancel`,
+  payment_intent_data: {
+    metadata: {
+      user_id: userId,
+    },
+  },
+});
+
 
     const checkoutUrl = session.url;
     const shortCode = generateShortCode();
