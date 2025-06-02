@@ -17,8 +17,14 @@ function generateShortCode() {
 async function createShortCheckoutLink(userId) {
   try {
     const baseUrl = process.env.BASE_URL;
+
+    // 🔒 必須チェック
     if (!baseUrl) {
       console.error('❌ BASE_URL が設定されていません');
+      return null;
+    }
+    if (!userId) {
+      console.error('❌ userId が未定義のまま createShortCheckoutLink に渡されました');
       return null;
     }
 
@@ -34,7 +40,7 @@ async function createShortCheckoutLink(userId) {
       success_url: `${baseUrl}/success`,
       cancel_url: `${baseUrl}/cancel`,
       metadata: {
-        user_id: userId,
+        user_id: userId, // ✅ Webhookで識別するための重要データ
       },
     });
 
