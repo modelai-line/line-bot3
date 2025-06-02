@@ -64,7 +64,7 @@ async function generateReply(userId, userMessage, userName) {
     if (!gomenSent) {
       const shortLink = await createShortCheckoutLink(userId);
       await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId).eq('date', today);
-      return `ごめんね、無料分は終わりだよ。また出会えたら、夏希って呼んでくれる？ 👉 ${shortLink}`;
+      return `ごめんね、無料分は終わりだよ。チケット買ってまたお話しようね。 👉 ${shortLink}`;
     } else {
       return null;
     }
