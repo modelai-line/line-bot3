@@ -42,6 +42,8 @@ async function saveMessage(userId, role, content) {
   }
 }
 
+console.log('✅ LINE userId:', userId);
+
 async function generateReply(userId, userMessage, userName) {
   const today = new Date().toISOString().split('T')[0];
   const { data: usageData, error: usageError } = await supabase
