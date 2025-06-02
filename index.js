@@ -72,7 +72,8 @@ async function generateReply(userId, userMessage, userName) {
         .update({ gomen_sent: true })
         .eq('user_id', userId)
         .eq('date', today);
-      return "ごめんね、無料分を使い切っちゃった💦 続きはここからチケット買ってね👉 https://natsuki-asmr.com/payment";
+     const shortUrl = await createShortCheckoutLink(userId);
+    return `ごめんね、無料分を使い切っちゃった💦 チケットはこちら👉 ${shortUrl}`;
     } else {
       return null;
     }
