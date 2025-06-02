@@ -1,9 +1,12 @@
+// 必要なライブラリを読み込み
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
 const { generateVoice } = require('./voiceService');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // 🔑 Stripe初期化（APIキー）
+const bodyParser = require('body-parser');
 
 const lineConfig = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
@@ -16,6 +19,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは22歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
 
+// 🔁 最近のメッセージを取得
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
     .from('chat_messages')
@@ -30,6 +34,7 @@ async function getRecentMessages(userId, limit = 5) {
   return data.reverse();
 }
 
+// 💾 メッセージを保存
 async function saveMessage(userId, role, content) {
   const { error } = await supabase
     .from('chat_messages')
@@ -39,10 +44,11 @@ async function saveMessage(userId, role, content) {
   }
 }
 
+// 🤖 ChatGPTの返答を生成
 async function generateReply(userId, userMessage, userName) {
   const today = new Date().toISOString().split('T')[0];
 
-  // 🔍 今日の usage データ取得
+  // 📊 今日の文字数データを取得
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent, char_limit')
@@ -59,7 +65,7 @@ async function generateReply(userId, userMessage, userName) {
   const gomenSent = usageData?.gomen_sent || false;
   const charLimit = usageData?.char_limit || 1000;
 
-  // 🧱 無料・有料制限チェック
+  // 🚫 文字数制限チェック
   if (currentTotal >= charLimit) {
     if (!gomenSent) {
       await supabase
@@ -69,16 +75,16 @@ async function generateReply(userId, userMessage, userName) {
         .eq('date', today);
       return "ごめんね、無料分を使い切っちゃった💦 続きはここからチケット買ってね👉 https://natsuki-asmr.com/payment";
     } else {
-      return null; // 応答しない
+      return null;
     }
   } else if (currentTotal >= charLimit - 100) {
     await saveMessage(userId, 'assistant', "あとちょっとで今日の分終わっちゃうかも…！");
   }
 
-  // 💬 ユーザー発言を保存
+  // 💬 会話履歴の保存
   await saveMessage(userId, 'user', userMessage);
 
-  // ⏪ 履歴取得
+  // 📚 ChatGPT入力用メッセージを整形
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
     role: 'system',
@@ -96,13 +102,9 @@ async function generateReply(userId, userMessage, userName) {
   });
 
   const botReply = completion.choices[0].message.content.trim();
-
-  // 💬 Bot返信保存
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
-
-  // 🔁 usage 更新（char_limitそのまま維持）
   await supabase.from('daily_usage').upsert([{
     user_id: userId,
     date: today,
@@ -114,7 +116,7 @@ async function generateReply(userId, userMessage, userName) {
   return botReply;
 }
 
-
+// 📥 LINE Webhookハンドラ（Botの中心）
 async function handleLineWebhook(req, res) {
   try {
     const events = req.body.events;
@@ -128,14 +130,7 @@ async function handleLineWebhook(req, res) {
       const userId = event.source.userId;
       const userMessage = event.message.text.trim();
 
-      await supabase
-        .from('message_targets')
-        .upsert([{ user_id: userId, is_active: true }])
-        .then(({ error }) => {
-          if (error) {
-            console.error('❌ Supabase message_targets upsert エラー:', error.message);
-          }
-        });
+      await supabase.from('message_targets').upsert([{ user_id: userId, is_active: true }]);
 
       let displayName = 'あなた';
       try {
@@ -150,8 +145,6 @@ async function handleLineWebhook(req, res) {
 
       try {
         const { url: voiceUrl, duration } = await generateVoice(replyText, displayName);
-
-        // 🔁 === 返信スタイルの切替: 以下から選んでコメント操作 ===
 
         // --- 音声のみを送る ---
         // return lineClient.replyMessage(event.replyToken, {
@@ -171,7 +164,6 @@ async function handleLineWebhook(req, res) {
           { type: 'text', text: replyText },
           { type: 'audio', originalContentUrl: voiceUrl, duration },
         ]);
-
       } catch (e) {
         console.error("🔊 generateVoice failed:", e.message);
         return lineClient.replyMessage(event.replyToken, {
@@ -188,15 +180,3 @@ async function handleLineWebhook(req, res) {
     res.status(500).send('Error');
   }
 }
-
-const app = express();
-const port = process.env.PORT || 3000;
-
-app.use(express.json());
-app.use("/audio", express.static(path.join(__dirname, "public/audio"))); // 🔊 不要であれば削除可
-app.post('/webhook', handleLineWebhook);
-app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
-
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
