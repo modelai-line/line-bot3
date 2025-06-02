@@ -193,6 +193,28 @@ app.use("/audio", express.static(path.join(__dirname, "public/audio")));
 // 📮 LINE BotのWebhookエンドポイント
 app.post('/webhook', handleLineWebhook);
 
+// 🔗 短縮URLリダイレクト処理（例: https://yourdomain.com/s/abc123 で呼ばれる）
+app.get('/s/:short_code', async (req, res) => {
+  const shortCode = req.params.short_code;
+
+  // Supabaseから元のCheckout URLを検索
+  const { data, error } = await supabase
+    .from('checkout_links')
+    .select('checkout_url')
+    .eq('short_code', shortCode)
+    .single();
+
+  if (error || !data) {
+    console.error("🔴 短縮リンクが見つかりません:", shortCode);
+    return res.status(404).send("リンクが無効か、期限切れです。");
+  }
+
+  // ✅ 本来のStripe Checkoutリンクにリダイレクト
+  res.redirect(data.checkout_url);
+});
+
+
+
 // 💳 StripeのWebhookエンドポイント（🎯 ← ここ追加！）
 app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
