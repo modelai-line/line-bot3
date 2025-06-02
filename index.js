@@ -192,7 +192,7 @@ app.use("/audio", express.static(path.join(__dirname, "public/audio")));
 app.post('/webhook', handleLineWebhook);
 
 // 💳 StripeのWebhookエンドポイント（🎯 ← ここ追加！）
-app.post('https://line-bot3.onrender.com/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
