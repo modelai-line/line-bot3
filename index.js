@@ -1,4 +1,3 @@
-// 必要なライブラリを読み込み
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
@@ -102,9 +101,13 @@ async function generateReply(userId, userMessage, userName) {
   });
 
   const botReply = completion.choices[0].message.content.trim();
+
+  // 💬 返信を保存
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
+
+  // 🔁 Supabaseのdaily_usage更新
   await supabase.from('daily_usage').upsert([{
     user_id: userId,
     date: today,
@@ -130,8 +133,17 @@ async function handleLineWebhook(req, res) {
       const userId = event.source.userId;
       const userMessage = event.message.text.trim();
 
-      await supabase.from('message_targets').upsert([{ user_id: userId, is_active: true }]);
+      // 🎯 アクティブユーザーとして記録
+      await supabase
+        .from('message_targets')
+        .upsert([{ user_id: userId, is_active: true }])
+        .then(({ error }) => {
+          if (error) {
+            console.error('❌ Supabase message_targets upsert エラー:', error.message);
+          }
+        });
 
+      // 📛 LINEユーザー名の取得
       let displayName = 'あなた';
       try {
         const profile = await lineClient.getProfile(userId);
@@ -140,26 +152,14 @@ async function handleLineWebhook(req, res) {
         console.warn(`プロフィール取得失敗: ${userId}`, err);
       }
 
+      // 🤖 返信生成
       const replyText = await generateReply(userId, userMessage, displayName);
       if (!replyText) return;
 
+      // 🎤 音声生成＋LINEへ送信
       try {
         const { url: voiceUrl, duration } = await generateVoice(replyText, displayName);
 
-        // --- 音声のみを送る ---
-        // return lineClient.replyMessage(event.replyToken, {
-        //   type: 'audio',
-        //   originalContentUrl: voiceUrl,
-        //   duration,
-        // });
-
-        // --- テキストのみを送る ---
-        // return lineClient.replyMessage(event.replyToken, {
-        //   type: 'text',
-        //   text: replyText,
-        // });
-
-        // --- 両方（テキスト + 音声）を送る ---
         return lineClient.replyMessage(event.replyToken, [
           { type: 'text', text: replyText },
           { type: 'audio', originalContentUrl: voiceUrl, duration },
@@ -180,3 +180,56 @@ async function handleLineWebhook(req, res) {
     res.status(500).send('Error');
   }
 }
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// 📦 JSONやaudio用のミドルウェア設定
+app.use(express.json());
+app.use("/audio", express.static(path.join(__dirname, "public/audio")));
+
+// 📮 LINE BotのWebhookエンドポイント
+app.post('/webhook', handleLineWebhook);
+
+// 💳 StripeのWebhookエンドポイント（🎯 ← ここ追加！）
+app.post('https://line-bot3.onrender.com/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('❌ Stripe webhook verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const lineUserId = session.metadata?.user_id;
+
+    if (lineUserId) {
+      const today = new Date().toISOString().split('T')[0];
+      await supabase.from('daily_usage').upsert([
+        {
+          user_id: lineUserId,
+          date: today,
+          char_limit: 10000,
+          gomen_sent: false,
+        }
+      ]);
+      console.log(`✅ チケット適用完了: ${lineUserId}`);
+    } else {
+      console.warn("❗ metadata.user_id が見つかりませんでした");
+    }
+  }
+
+  res.status(200).send('Received');
+});
+
+// 🔘 動作確認用のGETルート
+app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
+
+// 🚀 サーバー起動
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
