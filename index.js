@@ -42,8 +42,6 @@ async function saveMessage(userId, role, content) {
   }
 }
 
-console.log('✅ LINE userId:', userId);
-
 async function generateReply(userId, userMessage, userName) {
   const today = new Date().toISOString().split('T')[0];
   const { data: usageData, error: usageError } = await supabase
@@ -103,6 +101,7 @@ async function handleLineWebhook(req, res) {
     const promises = events.map(async (event) => {
       if (event.type !== 'message' || event.message.type !== 'text') return;
       const userId = event.source.userId;
+      console.log('✅ LINE userId:', userId);
       const userMessage = event.message.text.trim();
       await supabase.from('message_targets').upsert([{ user_id: userId, is_active: true }]);
       let displayName = 'あなた';
