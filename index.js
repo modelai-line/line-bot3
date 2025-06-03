@@ -1,4 +1,4 @@
-// index.js - LINE Bot with ChatGPT + Stripe + Supabase (累積方式対応)
+// index.js - LINE Bot with ChatGPT + Stripe + Supabase
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
@@ -19,27 +19,6 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは22歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
-
-function isCheckingUsage(text) {
-  const keywords = ['残り文字数', 'あとどれくらい', '文字数確認', '今の残り', '使える文字'];
-  return keywords.some(keyword => text.includes(keyword));
-}
-
-async function generateUsageReport(userId) {
-  const { data, error } = await supabase
-    .from('daily_usage')
-    .select('char_limit, total_chars')
-    .eq('user_id', userId)
-    .single();
-
-  if (error || !data) {
-    console.error('📛 Usage fetch error:', error?.message);
-    return "ごめんね、今は残り文字数が確認できないみたい…💦";
-  }
-
-  const remaining = data.char_limit - data.total_chars;
-  return `📝 残り文字数は「${remaining}文字」だよ！（合計 ${data.char_limit}文字中）`;
-}
 
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
@@ -94,7 +73,9 @@ async function generateReply(userId, userMessage, userName) {
   const recentMessages = await getRecentMessages(userId, 10);
   const systemMessage = {
     role: 'system',
-    content: `あなたは${personalityPrompt}\n相手の名前は「先輩」。あなたの大好きな男性です。友達です。猫っぽい。返信は2回に1回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。\n丁寧語、敬語で話さず、軽いノリで、ため口で話す。同じメッセージを繰り返さない。あなたはエステシャンの仕事をしています。`
+    content: `あなたは${personalityPrompt}
+相手の名前は「先輩」。あなたの大好きな男性です。友達です。猫っぽい。返信は2回に1回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
+丁寧語、敬語で話さず、軽いノリで、ため口で話す。同じメッセージを繰り返さない。あなたはエステシャンの仕事をしています。`
   };
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
   const completion = await openai.chat.completions.create({
@@ -131,9 +112,7 @@ async function handleLineWebhook(req, res) {
         displayName = profile.displayName;
       } catch {}
 
-      const replyText = isCheckingUsage(userMessage)
-        ? await generateUsageReport(userId)
-        : await generateReply(userId, userMessage, displayName);
+      const replyText = await generateReply(userId, userMessage, displayName);
 
       if (!replyText) return;
 
@@ -160,8 +139,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use("/audio", express.static(path.join(__dirname, "public/audio")));
+app.use(express.json());
 
-// Stripe webhook は json より前に！
 app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -179,13 +158,11 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
     const quantity = session.amount_total / 128000;
 
     if (userId) {
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase.from('daily_usage').select('char_limit, total_chars').eq('user_id', userId).eq('date', today).single();
+      const { data, error } = await supabase.from('daily_usage').select('char_limit, total_chars').eq('user_id', userId).single();
       const newLimit = (data?.char_limit || 0) + quantity * 10000;
 
       await supabase.from('daily_usage').upsert([{
         user_id: userId,
-        date: today,
         total_chars: data?.total_chars || 0,
         char_limit: newLimit,
         gomen_sent: false
@@ -196,9 +173,6 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
 
   res.status(200).send('OK');
 });
-
-// その後に json パーサー
-app.use(express.json());
 
 app.post('/webhook', handleLineWebhook);
 
