@@ -9,8 +9,12 @@ const supabase = createClient(
 
 // 🔵 キャラクター設定
 // ラピス
-const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
-const STYLE_ID = 52; // 甘え
+// const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
+// const STYLE_ID = 52; // 甘え
+
+// ロザリア・ガーネット
+const CHARACTER_ID = "f9ce50d1-2d89-415b-8045-49a78765fc98";
+const STYLE_ID = 164; // 内向的
 
 // 🔧 ファイル名を「YYYYMMDD-HHMM-ユーザー名.mp3」形式にする
 function formatFileName(userName) {
