@@ -1,4 +1,4 @@
-// index.js - LINE Bot with ChatGPT + Stripe + Supabase
+// index.js - LINE Bot with ChatGPT + Stripe + Supabase (累積方式対応)
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
@@ -26,12 +26,10 @@ function isCheckingUsage(text) {
 }
 
 async function generateUsageReport(userId) {
-  const today = new Date().toISOString().split('T')[0];
   const { data, error } = await supabase
     .from('daily_usage')
     .select('char_limit, total_chars')
     .eq('user_id', userId)
-    .eq('date', today)
     .single();
 
   if (error || !data) {
@@ -40,7 +38,7 @@ async function generateUsageReport(userId) {
   }
 
   const remaining = data.char_limit - data.total_chars;
-  return `📝 今日の残り文字数は「${remaining}文字」だよ！\n（合計 ${data.char_limit}文字中）`;
+  return `📝 残り文字数は「${remaining}文字」だよ！（合計 ${data.char_limit}文字中）`;
 }
 
 async function getRecentMessages(userId, limit = 5) {
@@ -67,12 +65,10 @@ async function saveMessage(userId, role, content) {
 }
 
 async function generateReply(userId, userMessage, userName) {
-  const today = new Date().toISOString().split('T')[0];
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent, char_limit')
     .eq('user_id', userId)
-    .eq('date', today)
     .single();
 
   if (usageError && usageError.code !== 'PGRST116') {
@@ -87,7 +83,7 @@ async function generateReply(userId, userMessage, userName) {
   if (currentTotal >= charLimit) {
     if (!gomenSent) {
       const shortLink = await createShortCheckoutLink(userId);
-      await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId).eq('date', today);
+      await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId);
       return `ごめんね、無料分は終わりだよ。ねぇ、もっとおしゃべりしたいよ…チケット買って！ 👉 ${shortLink}`;
     } else {
       return null;
@@ -112,7 +108,7 @@ async function generateReply(userId, userMessage, userName) {
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
-  await supabase.from('daily_usage').upsert([{ user_id: userId, date: today, total_chars: currentTotal + totalNewChars, char_limit: charLimit, gomen_sent: false }]);
+  await supabase.from('daily_usage').upsert([{ user_id: userId, total_chars: currentTotal + totalNewChars, char_limit: charLimit, gomen_sent: false }]);
 
   return botReply;
 }
