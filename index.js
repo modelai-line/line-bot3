@@ -157,20 +157,34 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const userId = session.metadata?.user_id;
-    const quantity = session.amount_total / 128000; // ← ここが間違い
+    const quantity = session.amount_total / 1280;  // ← 商品の単価に応じて調整
 
     if (userId) {
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase.from('daily_usage').select('char_limit').eq('user_id', userId).eq('date', today).single();
-      const newLimit = (data?.char_limit || 1000) + quantity * 10000;
+      // すでに存在するchar_limitの累積取得
+      const { data, error } = await supabase
+        .from('daily_usage')
+        .select('char_limit')
+        .eq('user_id', userId)
+        .single();
 
-      await supabase.from('daily_usage').upsert([{ user_id: userId, date: today, char_limit: newLimit, gomen_sent: false }]);
+      const prevLimit = data?.char_limit || 0;
+      const newLimit = prevLimit + quantity * 10000;
+
+      await supabase.from('daily_usage').upsert([
+        {
+          user_id: userId,
+          char_limit: newLimit,
+          gomen_sent: false
+        }
+      ]);
+
       console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
     }
   }
 
   res.status(200).send('OK');
 });
+
 
 app.use(express.json());
 
