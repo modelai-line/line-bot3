@@ -1,68 +1,50 @@
-const { createClient } = require('@supabase/supabase-js');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const BASE_URL = process.env.BASE_URL;
 
-// 🔑 ランダムな短縮コードを生成（例：6桁の英数字）
-function generateShortCode() {
-  return crypto.randomBytes(3).toString('hex'); // 6文字
+function generateShortCode(length = 6) {
+  return crypto.randomBytes(length).toString('base64url').substring(0, length);
 }
 
-// 🎟 ユーザーごとの Stripe Checkout リンクを作成し、短縮URLを返す関数
 async function createShortCheckoutLink(userId) {
-  try {
-    const baseUrl = process.env.BASE_URL;
-    if (!baseUrl) {
-      console.error('❌ BASE_URL が設定されていません');
-      return null;
-    }
+  const shortCode = generateShortCode();
 
-    console.log(`🎫 Stripe セッション作成開始: userId = ${userId}`);
-
-    // 1. StripeのCheckoutセッションを作成
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [
-        {
-          price: process.env.STRIPE_PRICE_ID,
-          quantity: 1,
-        },
-      ],
-      success_url: `${baseUrl}/success`,
-      cancel_url: `${baseUrl}/cancel`,
-      metadata: {
-        user_id: userId  // ✅ 確実に含める
-      }
-    });
-
-    const checkoutUrl = session.url;
-    const shortCode = generateShortCode();
-
-    // 2. Supabaseのcheckout_linksテーブルに保存
-    const { error } = await supabase.from('checkout_links').insert([
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    line_items: [
       {
-        user_id: userId,
-        short_code: shortCode,
-        checkout_url: checkoutUrl,
-        created_at: new Date().toISOString(),
-      },
-    ]);
+        price: process.env.STRIPE_PRICE_ID,
+        quantity: 1,
+        adjustable_quantity: {
+          enabled: true,
+          minimum: 1,
+          maximum: 10
+        }
+      }
+    ],
+    mode: 'payment',
+    metadata: {
+      user_id: userId,
+    },
+    success_url: `${BASE_URL}/success`,
+    cancel_url: `${BASE_URL}/cancel`,
+  });
 
-    if (error) {
-      console.error('❌ Supabase insert error:', error.message);
-      return null;
-    }
+  const { error } = await supabase.from('checkout_links').insert({
+    short_code: shortCode,
+    checkout_url: session.url,
+    user_id: userId,
+  });
 
-    return `${baseUrl}/s/${shortCode}`;
-
-  } catch (err) {
-    console.error('❌ Stripe checkout link error:', err.message);
-    return null;
+  if (error) {
+    console.error('❌ Supabase insert error:', error);
+    throw new Error('短縮リンクの作成に失敗しました');
   }
+
+  return `${BASE_URL}/s/${shortCode}`;
 }
 
 module.exports = { createShortCheckoutLink };
