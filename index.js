@@ -43,12 +43,11 @@ async function saveMessage(userId, role, content) {
 }
 
 async function generateReply(userId, userMessage, userName) {
-  const today = new Date().toISOString().split('T')[0];
+  // ✅ 累積方式なので today は不要
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent, char_limit')
     .eq('user_id', userId)
-    .eq('date', today)
     .single();
 
   if (usageError && usageError.code !== 'PGRST116') {
@@ -63,8 +62,8 @@ async function generateReply(userId, userMessage, userName) {
   if (currentTotal >= charLimit) {
     if (!gomenSent) {
       const shortLink = await createShortCheckoutLink(userId);
-      await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId).eq('date', today);
-      return `ごめんね、無料分は終わりだよ。チケット買ってまたお話しようね。 👉 ${shortLink}`;
+      await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId);
+      return `ごめんね、無料分は終わりだよ。また出会えたら、夏希って呼んでくれる？ 👉 ${shortLink}`;
     } else {
       return null;
     }
@@ -88,7 +87,14 @@ async function generateReply(userId, userMessage, userName) {
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
-  await supabase.from('daily_usage').upsert([{ user_id: userId, date: today, total_chars: currentTotal + totalNewChars, char_limit: charLimit, gomen_sent: false }]);
+  await supabase.from('daily_usage').upsert([
+    {
+      user_id: userId,
+      total_chars: currentTotal + totalNewChars,
+      char_limit: charLimit,
+      gomen_sent: false
+    }
+  ]);
 
   return botReply;
 }
