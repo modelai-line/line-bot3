@@ -164,8 +164,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use("/audio", express.static(path.join(__dirname, "public/audio")));
-app.use(express.json());
 
+// Stripe webhook は json より前に！
 app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -200,6 +200,9 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
 
   res.status(200).send('OK');
 });
+
+// その後に json パーサー
+app.use(express.json());
 
 app.post('/webhook', handleLineWebhook);
 
