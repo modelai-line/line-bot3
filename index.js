@@ -1,3 +1,4 @@
+// index.js - LINE Bot with ChatGPT + Stripe + Supabase
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
@@ -18,6 +19,29 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは22歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
+
+function isCheckingUsage(text) {
+  const keywords = ['残り文字数', 'あとどれくらい', '文字数確認', '今の残り', '使える文字'];
+  return keywords.some(keyword => text.includes(keyword));
+}
+
+async function generateUsageReport(userId) {
+  const today = new Date().toISOString().split('T')[0];
+  const { data, error } = await supabase
+    .from('daily_usage')
+    .select('char_limit, total_chars')
+    .eq('user_id', userId)
+    .eq('date', today)
+    .single();
+
+  if (error || !data) {
+    console.error('📛 Usage fetch error:', error?.message);
+    return "ごめんね、今は残り文字数が確認できないみたい…💦";
+  }
+
+  const remaining = data.char_limit - data.total_chars;
+  return `📝 今日の残り文字数は「${remaining}文字」だよ！\n（合計 ${data.char_limit}文字中）`;
+}
 
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
@@ -43,11 +67,12 @@ async function saveMessage(userId, role, content) {
 }
 
 async function generateReply(userId, userMessage, userName) {
-  // ✅ 累積方式なので today は不要
+  const today = new Date().toISOString().split('T')[0];
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent, char_limit')
     .eq('user_id', userId)
+    .eq('date', today)
     .single();
 
   if (usageError && usageError.code !== 'PGRST116') {
@@ -62,7 +87,7 @@ async function generateReply(userId, userMessage, userName) {
   if (currentTotal >= charLimit) {
     if (!gomenSent) {
       const shortLink = await createShortCheckoutLink(userId);
-      await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId);
+      await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId).eq('date', today);
       return `ごめんね、無料分は終わりだよ。ねぇ、もっとおしゃべりしたいよ…チケット買って！ 👉 ${shortLink}`;
     } else {
       return null;
@@ -87,14 +112,7 @@ async function generateReply(userId, userMessage, userName) {
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
-  await supabase.from('daily_usage').upsert([
-    {
-      user_id: userId,
-      total_chars: currentTotal + totalNewChars,
-      char_limit: charLimit,
-      gomen_sent: false
-    }
-  ]);
+  await supabase.from('daily_usage').upsert([{ user_id: userId, date: today, total_chars: currentTotal + totalNewChars, char_limit: charLimit, gomen_sent: false }]);
 
   return botReply;
 }
@@ -110,13 +128,17 @@ async function handleLineWebhook(req, res) {
       console.log('✅ LINE userId:', userId);
       const userMessage = event.message.text.trim();
       await supabase.from('message_targets').upsert([{ user_id: userId, is_active: true }]);
+
       let displayName = 'あなた';
       try {
         const profile = await lineClient.getProfile(userId);
         displayName = profile.displayName;
       } catch {}
 
-      const replyText = await generateReply(userId, userMessage, displayName);
+      const replyText = isCheckingUsage(userMessage)
+        ? await generateUsageReport(userId)
+        : await generateReply(userId, userMessage, displayName);
+
       if (!replyText) return;
 
       try {
@@ -142,6 +164,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use("/audio", express.static(path.join(__dirname, "public/audio")));
+app.use(express.json());
 
 app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -157,27 +180,20 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const userId = session.metadata?.user_id;
-    const quantity = session.amount_total / 1280;  // ← 商品の単価に応じて調整
+    const quantity = session.amount_total / 128000;
 
     if (userId) {
-      // すでに存在するchar_limitの累積取得
-      const { data, error } = await supabase
-        .from('daily_usage')
-        .select('char_limit')
-        .eq('user_id', userId)
-        .single();
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase.from('daily_usage').select('char_limit, total_chars').eq('user_id', userId).eq('date', today).single();
+      const newLimit = (data?.char_limit || 0) + quantity * 10000;
 
-      const prevLimit = data?.char_limit || 0;
-      const newLimit = prevLimit + quantity * 10000;
-
-      await supabase.from('daily_usage').upsert([
-        {
-          user_id: userId,
-          char_limit: newLimit,
-          gomen_sent: false
-        }
-      ]);
-
+      await supabase.from('daily_usage').upsert([{
+        user_id: userId,
+        date: today,
+        total_chars: data?.total_chars || 0,
+        char_limit: newLimit,
+        gomen_sent: false
+      }]);
       console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
     }
   }
@@ -185,49 +201,17 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
   res.status(200).send('OK');
 });
 
-
-app.use(express.json());
-
 app.post('/webhook', handleLineWebhook);
 
 app.get('/s/:short_code', async (req, res) => {
   const shortCode = req.params.short_code;
   const { data, error } = await supabase.from('checkout_links').select('checkout_url').eq('short_code', shortCode).single();
-
   if (error || !data) {
     return res.status(404).send("リンクが無効か、期限切れです。");
   }
-
   res.redirect(data.checkout_url);
 });
 
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
-
-
-app.get("/success", (req, res) => {
-  res.send(`
-    <html>
-      <head><title>決済完了</title></head>
-      <body>
-        <h1>🎉 決済が完了しました！</h1>
-        <p>LINEに戻って「夏希」と話してね💬</p>
-      </body>
-    </html>
-  `);
-});
-
-app.get("/cancel", (req, res) => {
-  res.send(`
-    <html>
-      <head><title>キャンセルされました</title></head>
-      <body>
-        <h1>😢 決済がキャンセルされました</h1>
-        <p>また必要になったら、もう一度購入してね！</p>
-      </body>
-    </html>
-  `);
-});
-
-
 
 app.listen(port, () => console.log(`Server running on port ${port}`));
