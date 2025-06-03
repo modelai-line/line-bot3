@@ -2,15 +2,14 @@ const { createClient } = require('@supabase/supabase-js');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const crypto = require('crypto');
 
-// Supabase初期化（サービスロールキーを使用）
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 🔑 ランダムな短縮コードを生成（6桁の英数字）
+// 🔑 ランダムな短縮コードを生成（例：6桁の英数字）
 function generateShortCode() {
-  return crypto.randomBytes(3).toString('hex'); // 例: "a1b2c3"
+  return crypto.randomBytes(3).toString('hex'); // 6文字
 }
 
 // 🎟 ユーザーごとの Stripe Checkout リンクを作成し、短縮URLを返す関数
@@ -22,22 +21,22 @@ async function createShortCheckoutLink(userId) {
       return null;
     }
 
-    console.log('🎫 Stripe セッション作成開始: userId =', userId);
+    console.log(`🎫 Stripe セッション作成開始: userId = ${userId}`);
 
     // 1. StripeのCheckoutセッションを作成
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [
         {
-          price: process.env.STRIPE_PRICE_ID, // StripeのPrice IDを指定
+          price: process.env.STRIPE_PRICE_ID,
           quantity: 1,
         },
       ],
       success_url: `${baseUrl}/success`,
       cancel_url: `${baseUrl}/cancel`,
       metadata: {
-        user_id: userId, // ✅ Webhook用に埋め込む
-      },
+        user_id: userId  // ✅ 確実に含める
+      }
     });
 
     const checkoutUrl = session.url;
@@ -58,7 +57,6 @@ async function createShortCheckoutLink(userId) {
       return null;
     }
 
-    // 3. 有効な短縮URLを返す
     return `${baseUrl}/s/${shortCode}`;
 
   } catch (err) {
