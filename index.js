@@ -203,4 +203,31 @@ app.get('/s/:short_code', async (req, res) => {
 
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
+
+app.get("/success", (req, res) => {
+  res.send(`
+    <html>
+      <head><title>決済完了</title></head>
+      <body>
+        <h1>🎉 決済が完了しました！</h1>
+        <p>LINEに戻って「夏希」と話してね💬</p>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/cancel", (req, res) => {
+  res.send(`
+    <html>
+      <head><title>キャンセルされました</title></head>
+      <body>
+        <h1>😢 決済がキャンセルされました</h1>
+        <p>また必要になったら、もう一度購入してね！</p>
+      </body>
+    </html>
+  `);
+});
+
+
+
 app.listen(port, () => console.log(`Server running on port ${port}`));
