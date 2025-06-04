@@ -89,7 +89,19 @@ async function generateReply(userId, userMessage, userName) {
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
-  await supabase.from('daily_usage').upsert([{ user_id: userId, total_chars: currentTotal + totalNewChars, char_limit: charLimit, gomen_sent: false }]);
+  
+const { error: updateError } = await supabase.from('daily_usage').upsert([{
+  user_id: userId,
+  date: today,
+  total_chars: currentTotal + totalNewChars,
+  char_limit: charLimit,
+  gomen_sent: false
+}]);
+
+if (updateError) {
+  console.error('❌ daily_usage upsert error:', updateError.message);
+}
+
 
   return botReply;
 }
