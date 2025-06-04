@@ -44,6 +44,8 @@ async function saveMessage(userId, role, content) {
 }
 
 async function generateReply(userId, userMessage, userName) {
+  const today = new Date().toISOString().split('T')[0]; // ← これを追加！
+
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent, char_limit')
@@ -77,6 +79,7 @@ async function generateReply(userId, userMessage, userName) {
 相手の名前は「先輩」。あなたの大好きな男性です。友達です。猫っぽい。返信は2回に1回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
 丁寧語、敬語で話さず、軽いノリで、ため口で話す。同じメッセージを繰り返さない。あなたはエステシャンの仕事をしています。`
   };
+
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
   const completion = await openai.chat.completions.create({
     model: 'gpt-3.5-turbo',
@@ -89,22 +92,22 @@ async function generateReply(userId, userMessage, userName) {
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
-  
-const { error: updateError } = await supabase.from('daily_usage').upsert([{
-  user_id: userId,
-  date: today,
-  total_chars: currentTotal + totalNewChars,
-  char_limit: charLimit,
-  gomen_sent: false
-}]);
 
-if (updateError) {
-  console.error('❌ daily_usage upsert error:', updateError.message);
-}
+  const { error: updateError } = await supabase.from('daily_usage').upsert([{
+    user_id: userId,
+    date: today,
+    total_chars: currentTotal + totalNewChars,
+    char_limit: charLimit,
+    gomen_sent: false
+  }]);
 
+  if (updateError) {
+    console.error('❌ daily_usage upsert error:', updateError.message);
+  }
 
   return botReply;
 }
+
 
 async function handleLineWebhook(req, res) {
   try {
