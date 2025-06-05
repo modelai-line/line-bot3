@@ -61,9 +61,24 @@ async function generateReply(userId, userMessage, userName) {
 
   if (currentTotal >= charLimit) {
     if (!gomenSent) {
-      const shortLink = await createShortCheckoutLink(userId);
-      await supabase.from('daily_usage').update({ gomen_sent: true }).eq('user_id', userId);
-      return `ごめんね、無料分は終わりだよ。ねぇ、もっとおしゃべりしたいよ…チケット買って！ 👉 ${shortLink}`;
+      try {
+        const shortLink = await createShortCheckoutLink(userId);
+        console.log('✅ チェックアウトリンク生成成功:', shortLink);
+
+        const { error: updateError } = await supabase
+          .from('daily_usage')
+          .update({ gomen_sent: true })
+          .eq('user_id', userId);
+
+        if (updateError) {
+          console.error('❌ gomen_sent update error:', updateError.message);
+        }
+
+        return `ごめんね、無料分は終わりだよ。ねぇ、もっとおしゃべりしたいよ…チケット買って！ 👉 ${shortLink}`;
+      } catch (err) {
+        console.error('❌ createShortCheckoutLink error:', err.message);
+        return "リンクの生成に失敗しちゃったみたい…もう一度試してくれる？";
+      }
     } else {
       return null;
     }
@@ -100,10 +115,9 @@ async function generateReply(userId, userMessage, userName) {
   if (updateError) {
     console.error('❌ daily_usage upsert error:', updateError.message);
   }
+
   return botReply;
 }
-
-// 他のコード部分（handleLineWebhookなど）はそのまま変更せず利用できます
 
 
 async function handleLineWebhook(req, res) {
