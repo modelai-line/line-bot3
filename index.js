@@ -44,8 +44,6 @@ async function saveMessage(userId, role, content) {
 }
 
 async function generateReply(userId, userMessage, userName) {
-  const today = new Date().toISOString().split('T')[0];
-
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
     .select('total_chars, gomen_sent, char_limit')
@@ -94,7 +92,6 @@ async function generateReply(userId, userMessage, userName) {
 
   const { error: updateError } = await supabase.from('daily_usage').upsert([{
     user_id: userId,
-    date: today,
     total_chars: currentTotal + totalNewChars,
     char_limit: charLimit,
     gomen_sent: false
@@ -103,9 +100,11 @@ async function generateReply(userId, userMessage, userName) {
   if (updateError) {
     console.error('❌ daily_usage upsert error:', updateError.message);
   }
-
   return botReply;
 }
+
+// 他のコード部分（handleLineWebhookなど）はそのまま変更せず利用できます
+
 
 async function handleLineWebhook(req, res) {
   try {
