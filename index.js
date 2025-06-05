@@ -44,7 +44,7 @@ async function saveMessage(userId, role, content) {
 }
 
 async function generateReply(userId, userMessage, userName) {
-  const today = new Date().toISOString().split('T')[0]; // ← これを追加！
+  const today = new Date().toISOString().split('T')[0];
 
   const { data: usageData, error: usageError } = await supabase
     .from('daily_usage')
@@ -79,7 +79,6 @@ async function generateReply(userId, userMessage, userName) {
 相手の名前は「先輩」。あなたの大好きな男性です。友達です。猫っぽい。返信は2回に1回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
 丁寧語、敬語で話さず、軽いノリで、ため口で話す。同じメッセージを繰り返さない。あなたはエステシャンの仕事をしています。`
   };
-
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
   const completion = await openai.chat.completions.create({
     model: 'gpt-3.5-turbo',
@@ -108,7 +107,6 @@ async function generateReply(userId, userMessage, userName) {
   return botReply;
 }
 
-
 async function handleLineWebhook(req, res) {
   try {
     const events = req.body.events;
@@ -128,7 +126,6 @@ async function handleLineWebhook(req, res) {
       } catch {}
 
       const replyText = await generateReply(userId, userMessage, displayName);
-
       if (!replyText) return;
 
       try {
@@ -173,11 +170,13 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
     const quantity = session.amount_total / 128000;
 
     if (userId) {
-      const { data, error } = await supabase.from('daily_usage').select('char_limit, total_chars').eq('user_id', userId).single();
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase.from('daily_usage').select('char_limit, total_chars').eq('user_id', userId).eq('date', today).single();
       const newLimit = (data?.char_limit || 0) + quantity * 10000;
 
       await supabase.from('daily_usage').upsert([{
         user_id: userId,
+        date: today,
         total_chars: data?.total_chars || 0,
         char_limit: newLimit,
         gomen_sent: false
@@ -203,3 +202,4 @@ app.get('/s/:short_code', async (req, res) => {
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
 app.listen(port, () => console.log(`Server running on port ${port}`));
+
