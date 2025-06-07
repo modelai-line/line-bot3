@@ -73,7 +73,7 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
       } else {
         console.log(`✅ Stripe決済成功！${userId} に ${addedChars}文字を追加（合計 ${newLimit}）`);
 
-        const thankYouMessage = "チケット買ってくれてありがとう。またお話してね。";
+        const thankYouMessage = "ほんとに買ってくれたの？嬉しい！また話しかけてね。";
         try {
           let displayName = "あなた";
           try {
