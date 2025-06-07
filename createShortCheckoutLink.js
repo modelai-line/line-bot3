@@ -16,13 +16,7 @@ async function createShortCheckoutLink(userId) {
     payment_method_types: ['card'],
     line_items: [
       {
-        price_data: {
-          currency: 'jpy',
-          unit_amount: 128000, // 1280円（×100）
-          product_data: {
-            name: 'LINEチャットチケット（10000文字）',
-          },
-        },
+        price: process.env.STRIPE_PRICE_ID, // ✅ Stripeで事前に作成したPrice IDを使用
         quantity: 1,
         adjustable_quantity: {
           enabled: true,
@@ -33,7 +27,7 @@ async function createShortCheckoutLink(userId) {
     ],
     mode: 'payment',
     metadata: {
-      user_id: userId,
+      user_id: userId
     },
     success_url: `${BASE_URL}/success`,
     cancel_url: `${BASE_URL}/cancel`,
