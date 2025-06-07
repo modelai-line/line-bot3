@@ -18,7 +18,7 @@ const lineClient = new Client(lineConfig);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは22歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは21歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -43,7 +43,7 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
     // ✅ 枚数取得（adjustable_quantityで選択された）
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
     const quantity = lineItems.data?.[0]?.quantity || 1;
-    const addedChars = quantity * 10000;
+    const addedChars = quantity * 5000;
 
     if (userId) {
       const { data, error } = await supabase
@@ -74,7 +74,7 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
         console.log(`✅ Stripe決済成功：${userId} に ${addedChars}文字追加`);
 
         // 🎉 感謝メッセージ送信
-        const thankYouMessage = "チケット買ってくれてありがとう。またお話してね。";
+        const thankYouMessage = "ホントに買ってくれたの？嬉しい！いつでも話かけてね！";
         let displayName = "あなた";
         try {
           const profile = await lineClient.getProfile(userId);
@@ -141,7 +141,7 @@ async function generateReply(userId, userMessage, userName) {
 
   const currentTotal = usageData?.total_chars || 0;
   const gomenSent = usageData?.gomen_sent || false;
-  const charLimit = usageData?.char_limit || 1000;
+  const charLimit = usageData?.char_limit || 1000;//初期の無料分
 
   if (currentTotal >= charLimit) {
     if (!gomenSent) {
@@ -174,7 +174,7 @@ async function generateReply(userId, userMessage, userName) {
     role: 'system',
     content: `あなたは${personalityPrompt}
 相手の名前は「先輩」。あなたの大好きな男性です。友達です。猫っぽい。返信は2回に1回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
-丁寧語、敬語で話さず、軽いノリで、ため口で話す。同じメッセージを繰り返さない。あなたはエステシャンの仕事をしています。`
+丁寧語、敬語で話さず、軽いノリで、ため口で話す。同じメッセージを繰り返さない。あなたはエステで働いでいて、日々マッサージや美容の勉強をしています。`
   };
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
   const completion = await openai.chat.completions.create({
