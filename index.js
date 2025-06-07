@@ -1,36 +1,236 @@
-// Stripe Webhookの中の checkout.session.completed 処理内
+// index.js - LINE Bot with ChatGPT + Stripe + Supabase（char_limit 累積加算 + Stripe fix）
+const express = require('express');
+const path = require('path');
+const { Client } = require('@line/bot-sdk');
+const { createClient } = require('@supabase/supabase-js');
+const OpenAI = require('openai');
+const { generateVoice } = require('./voiceService');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const bodyParser = require('body-parser');
+const { createShortCheckoutLink } = require('./createShortCheckoutLink');
 
-const session = event.data.object;
-const userId = session.metadata?.user_id;
-const quantity = session.amount_total / 128000;
+const lineConfig = {
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET,
+};
 
-if (userId) {
-  // 🆕 日付に関係なく、そのユーザーの char_limit を取得
+const lineClient = new Client(lineConfig);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは22歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use("/audio", express.static(path.join(__dirname, "public/audio")));
+
+// ✅ Stripe Webhook（eventスコープ修正済み + char_limit 累積）
+app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('❌ Stripe webhook verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const userId = session.metadata?.user_id;
+    const quantity = session.amount_total / 128000;
+
+    if (userId) {
+      const { data, error } = await supabase
+        .from('daily_usage')
+        .select('char_limit, total_chars')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+        .limit(1)
+        .single();
+
+      const newLimit = (data?.char_limit || 0) + quantity * 10000;
+      const newTotalChars = data?.total_chars || 0;
+      const today = new Date().toISOString().split('T')[0];
+
+      const { error: upsertError } = await supabase
+        .from('daily_usage')
+        .upsert([{
+          user_id: userId,
+          date: today,
+          total_chars: newTotalChars,
+          char_limit: newLimit,
+          gomen_sent: false
+        }]);
+
+      if (upsertError) {
+        console.error('❌ daily_usage upsert error:', upsertError.message);
+      } else {
+        console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
+      }
+    }
+  }
+
+  res.status(200).send('OK');
+});
+
+// 他ルート用に json パーサー
+app.use(express.json());
+
+async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
-    .from('daily_usage')
-    .select('char_limit, total_chars')
+    .from('chat_messages')
+    .select('role, content')
     .eq('user_id', userId)
-    .order('date', { ascending: false }) // 最も新しい記録を取得
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('Supabase getRecentMessages error:', error);
+    return [];
+  }
+  return data.reverse();
+}
+
+async function saveMessage(userId, role, content) {
+  const { error } = await supabase
+    .from('chat_messages')
+    .insert([{ user_id: userId, role, content }]);
+  if (error) {
+    console.error('Supabase saveMessage error:', error);
+  }
+}
+
+async function generateReply(userId, userMessage, userName) {
+  const { data: usageData, error: usageError } = await supabase
+    .from('daily_usage')
+    .select('total_chars, gomen_sent, char_limit')
+    .eq('user_id', userId)
+    .order('date', { ascending: false })
     .limit(1)
     .single();
 
-  const newLimit = (data?.char_limit || 0) + quantity * 10000;
-  const newTotalChars = data?.total_chars || 0;
+  if (usageError && usageError.code !== 'PGRST116') {
+    console.error('❌ Supabase daily_usage fetch error:', usageError.message);
+    return "ちょっとエラーが出ちゃったみたい…ごめんね💦";
+  }
 
-  // 🔁 すでにレコードがあれば更新、なければ新規
-  const { error: upsertError } = await supabase
-    .from('daily_usage')
-    .upsert([{
-      user_id: userId,
-      date: new Date().toISOString().split('T')[0], // 今日でOK（履歴用に残す）
-      total_chars: newTotalChars,
-      char_limit: newLimit,
-      gomen_sent: false
-    }]);
+  const currentTotal = usageData?.total_chars || 0;
+  const gomenSent = usageData?.gomen_sent || false;
+  const charLimit = usageData?.char_limit || 1000;
 
-  if (upsertError) {
-    console.error('❌ daily_usage upsert error:', upsertError.message);
-  } else {
-    console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
+  if (currentTotal >= charLimit) {
+    if (!gomenSent) {
+      try {
+        const shortLink = await createShortCheckoutLink(userId);
+        console.log('✅ チェックアウトリンク生成成功:', shortLink);
+
+        const { error: updateError } = await supabase
+          .from('daily_usage')
+          .update({ gomen_sent: true })
+          .eq('user_id', userId);
+
+        if (updateError) {
+          console.error('❌ gomen_sent update error:', updateError.message);
+        }
+
+        return `ごめんね、無料分は終わりだよ。ねぇ、もっとおしゃべりしたいよ…チケット買って！ 👉 ${shortLink}`;
+      } catch (err) {
+        console.error('❌ createShortCheckoutLink error:', err.message);
+        return "リンクの生成に失敗しちゃったみたい…もう一度試してくれる？";
+      }
+    } else {
+      return null;
+    }
+  }
+
+  await saveMessage(userId, 'user', userMessage);
+  const recentMessages = await getRecentMessages(userId, 10);
+  const systemMessage = {
+    role: 'system',
+    content: `あなたは${personalityPrompt}
+相手の名前は「先輩」。あなたの大好きな男性です。友達です。猫っぽい。返信は2回に1回は20文字以内で簡潔に、それ以外は40文字以内。たまに優しいことを言う。
+丁寧語、敬語で話さず、軽いノリで、ため口で話す。同じメッセージを繰り返さない。あなたはエステシャンの仕事をしています。`
+  };
+  const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-3.5-turbo',
+    messages,
+    max_tokens: 100,
+    temperature: 0.7,
+  });
+
+  const botReply = completion.choices[0].message.content.trim();
+  await saveMessage(userId, 'assistant', botReply);
+
+  const totalNewChars = userMessage.length + botReply.length;
+
+  const { error: updateError } = await supabase.from('daily_usage').upsert([{
+    user_id: userId,
+    total_chars: currentTotal + totalNewChars,
+    char_limit: charLimit,
+    gomen_sent: false
+  }]);
+
+  if (updateError) {
+    console.error('❌ daily_usage upsert error:', updateError.message);
+  }
+
+  return botReply;
+}
+
+async function handleLineWebhook(req, res) {
+  try {
+    const events = req.body.events;
+    if (!events || events.length === 0) return res.status(200).send('No events');
+
+    const promises = events.map(async (event) => {
+      if (event.type !== 'message' || event.message.type !== 'text') return;
+      const userId = event.source.userId;
+      console.log('✅ LINE userId:', userId);
+      const userMessage = event.message.text.trim();
+      await supabase.from('message_targets').upsert([{ user_id: userId, is_active: true }]);
+
+      let displayName = 'あなた';
+      try {
+        const profile = await lineClient.getProfile(userId);
+        displayName = profile.displayName;
+      } catch {}
+
+      const replyText = await generateReply(userId, userMessage, displayName);
+      if (!replyText) return;
+
+      try {
+        const { url: voiceUrl, duration } = await generateVoice(replyText, displayName);
+        return lineClient.replyMessage(event.replyToken, [
+          { type: 'text', text: replyText },
+          { type: 'audio', originalContentUrl: voiceUrl, duration },
+        ]);
+      } catch {
+        return lineClient.replyMessage(event.replyToken, { type: 'text', text: replyText });
+      }
+    });
+
+    await Promise.all(promises);
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('handleLineWebhook error:', error);
+    res.status(500).send('Error');
   }
 }
+
+app.post('/webhook', handleLineWebhook);
+
+app.get('/s/:short_code', async (req, res) => {
+  const shortCode = req.params.short_code;
+  const { data, error } = await supabase.from('checkout_links').select('checkout_url').eq('short_code', shortCode).single();
+  if (error || !data) {
+    return res.status(404).send("リンクが無効か、期限切れです。");
+  }
+  res.redirect(data.checkout_url);
+});
+
+app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
+
+app.listen(port, () => console.log(`Server running on port ${port}`));
