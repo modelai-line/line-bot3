@@ -9,11 +9,15 @@ const supabase = createClient(
 
 // 🔵 キャラクター設定
 // ラピス
-const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
-const STYLE_ID = 52; // 甘え
+// const CHARACTER_ID = "47abf5ad-5336-4ace-9254-c145590a9576";
+// const STYLE_ID = 52; // 甘え
 
-// ロザリア・ガーネット
-// const CHARACTER_ID = "f9ce50d1-2d89-415b-8045-49a78765fc98";
+// 高宮 涼香
+const CHARACTER_ID = "294eeefe-f46c-45a6-9e5a-e6a3b3d6eb6e";
+const STYLE_ID = 25; // 優しい
+
+// 春乃 セリーヌ 白鳥
+// const CHARACTER_ID = "5e947136-bceb-426a-ba32-65e556bb4b6c";
 // const STYLE_ID = 164; // 内向的
 
 // 🔧 ファイル名を「YYYYMMDD-HHMM-ユーザー名.mp3」形式にする
