@@ -20,6 +20,50 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const personalityPrompt = process.env.PERSONALITY_PROMPT || "あなたは22歳の女性。名前は「夏希」。ツンデレで、ため口で話す。";
 
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use("/audio", express.static(path.join(__dirname, "public/audio")));
+
+// ✅ Stripe Webhookは rawボディを使う必要があるため、先に定義
+app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('❌ Stripe webhook verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const userId = session.metadata?.user_id;
+    const quantity = session.amount_total / 128000;
+
+    if (userId) {
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase.from('daily_usage').select('char_limit, total_chars').eq('user_id', userId).eq('date', today).single();
+      const newLimit = (data?.char_limit || 0) + quantity * 10000;
+
+      await supabase.from('daily_usage').upsert([{
+        user_id: userId,
+        date: today,
+        total_chars: data?.total_chars || 0,
+        char_limit: newLimit,
+        gomen_sent: false
+      }]);
+      console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
+    }
+  }
+
+  res.status(200).send('OK');
+});
+
+// 🔻 ここで express.json() を全体に適用（Stripeには影響しない）
+app.use(express.json());
+
 async function getRecentMessages(userId, limit = 5) {
   const { data, error } = await supabase
     .from('chat_messages')
@@ -119,7 +163,6 @@ async function generateReply(userId, userMessage, userName) {
   return botReply;
 }
 
-
 async function handleLineWebhook(req, res) {
   try {
     const events = req.body.events;
@@ -160,47 +203,6 @@ async function handleLineWebhook(req, res) {
   }
 }
 
-const app = express();
-const port = process.env.PORT || 3000;
-
-app.use("/audio", express.static(path.join(__dirname, "public/audio")));
-app.use(express.json());
-
-app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('❌ Stripe webhook verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const userId = session.metadata?.user_id;
-    const quantity = session.amount_total / 128000;
-
-    if (userId) {
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase.from('daily_usage').select('char_limit, total_chars').eq('user_id', userId).eq('date', today).single();
-      const newLimit = (data?.char_limit || 0) + quantity * 10000;
-
-      await supabase.from('daily_usage').upsert([{
-        user_id: userId,
-        date: today,
-        total_chars: data?.total_chars || 0,
-        char_limit: newLimit,
-        gomen_sent: false
-      }]);
-      console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
-    }
-  }
-
-  res.status(200).send('OK');
-});
-
 app.post('/webhook', handleLineWebhook);
 
 app.get('/s/:short_code', async (req, res) => {
@@ -215,4 +217,3 @@ app.get('/s/:short_code', async (req, res) => {
 app.get("/", (req, res) => res.send("LINE ChatGPT Bot is running"));
 
 app.listen(port, () => console.log(`Server running on port ${port}`));
-
