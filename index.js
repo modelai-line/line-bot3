@@ -158,7 +158,7 @@ async function generateReply(userId, userMessage, userName) {
           console.error('❌ gomen_sent update error:', updateError.message);
         }
 
-        return `ごめんね、無料分は終わりだよ。ねぇ、もっとおしゃべりしたいよ…チケット買って！ 👉 ${shortLink}`;
+        return `ごめんね、もう終わりだよ。ねぇ、もっとおしゃべりしたいなら…チケット買って！ 👉 ${shortLink}`;
       } catch (err) {
         console.error('❌ createShortCheckoutLink error:', err.message);
         return "リンクの生成に失敗しちゃったみたい…もう一度試してくれる？";
