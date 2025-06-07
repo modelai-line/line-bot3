@@ -1,4 +1,4 @@
-// index.js - LINE Bot with ChatGPT + Stripe + Supabase（char_limit 累積加算 + Stripe fix）
+// index.js - 修正版（Stripe決済で10000文字加算）
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
@@ -25,7 +25,7 @@ const port = process.env.PORT || 3000;
 
 app.use("/audio", express.static(path.join(__dirname, "public/audio")));
 
-// ✅ Stripe Webhook（eventスコープ修正済み + char_limit 累積）
+// ✅ Stripe Webhook（文字数計算修正済み）
 app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -40,7 +40,11 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const userId = session.metadata?.user_id;
-    const quantity = session.amount_total / 128000;
+
+    const amountYen = session.amount_total / 100; // 金額を円に戻す
+    const ticketPrice = 1280; // 1枚1280円
+    const quantity = amountYen / ticketPrice;
+    const addedChars = Math.floor(quantity * 10000); // 1枚＝10000文字
 
     if (userId) {
       const { data, error } = await supabase
@@ -51,7 +55,7 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
         .limit(1)
         .single();
 
-      const newLimit = (data?.char_limit || 0) + quantity * 10000;
+      const newLimit = (data?.char_limit || 0) + addedChars;
       const newTotalChars = data?.total_chars || 0;
       const today = new Date().toISOString().split('T')[0];
 
@@ -68,7 +72,7 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
       if (upsertError) {
         console.error('❌ daily_usage upsert error:', upsertError.message);
       } else {
-        console.log(`✅ Stripe決済成功！${userId} の char_limit を ${newLimit} に更新`);
+        console.log(`✅ Stripe決済成功！${userId} に ${addedChars}文字を追加（合計 ${newLimit}）`);
       }
     }
   }
