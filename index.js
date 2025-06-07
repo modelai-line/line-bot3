@@ -1,4 +1,4 @@
-// index.js - 修正版（Stripe決済で10000文字加算）
+// index.js - Stripe決済後にchar_limit加算＆LINEに感謝メッセージ + 音声送信
 const express = require('express');
 const path = require('path');
 const { Client } = require('@line/bot-sdk');
@@ -25,7 +25,6 @@ const port = process.env.PORT || 3000;
 
 app.use("/audio", express.static(path.join(__dirname, "public/audio")));
 
-// ✅ Stripe Webhook（文字数計算修正済み）
 app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -41,10 +40,10 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
     const session = event.data.object;
     const userId = session.metadata?.user_id;
 
-    const amountYen = session.amount_total / 100; // 金額を円に戻す
-    const ticketPrice = 1280; // 1枚1280円
+    const amountYen = session.amount_total / 100;
+    const ticketPrice = 1280;
     const quantity = amountYen / ticketPrice;
-    const addedChars = Math.floor(quantity * 10000); // 1枚＝10000文字
+    const addedChars = Math.floor(quantity * 10000);
 
     if (userId) {
       const { data, error } = await supabase
@@ -73,6 +72,24 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
         console.error('❌ daily_usage upsert error:', upsertError.message);
       } else {
         console.log(`✅ Stripe決済成功！${userId} に ${addedChars}文字を追加（合計 ${newLimit}）`);
+
+        const thankYouMessage = "チケット買ってくれてありがとう。またお話してね。";
+        try {
+          let displayName = "あなた";
+          try {
+            const profile = await lineClient.getProfile(userId);
+            displayName = profile.displayName;
+          } catch {}
+
+          const { url: voiceUrl, duration } = await generateVoice(thankYouMessage, displayName);
+          await lineClient.pushMessage(userId, [
+            { type: 'text', text: thankYouMessage },
+            { type: 'audio', originalContentUrl: voiceUrl, duration },
+          ]);
+          console.log(`✅ 感謝メッセージ送信完了 to ${userId}`);
+        } catch (e) {
+          console.error('❌ 感謝メッセージ送信エラー:', e.message);
+        }
       }
     }
   }
@@ -80,7 +97,6 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
   res.status(200).send('OK');
 });
 
-// 他ルート用に json パーサー
 app.use(express.json());
 
 async function getRecentMessages(userId, limit = 5) {
