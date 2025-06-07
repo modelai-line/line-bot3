@@ -178,13 +178,17 @@ async function generateReply(userId, userMessage, userName) {
   };
   const messages = [systemMessage, ...recentMessages.map(m => ({ role: m.role, content: m.content }))];
   const completion = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
-    messages,
-    max_tokens: 100,
-    temperature: 0.7,
-  });
+  model: 'gpt-3.5-turbo',
+  messages,
+  max_tokens: 100,
+  temperature: 0.7,
+});
 
-  const botReply = completion.choices[0].message.content.trim();
+let botReply = completion.choices[0].message.content.trim();
+
+// ✨「【20文字以内】」などを削除
+botReply = botReply.replace(/【.*?】/g, '').trim();
+  
   await saveMessage(userId, 'assistant', botReply);
 
   const totalNewChars = userMessage.length + botReply.length;
