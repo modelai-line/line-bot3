@@ -40,10 +40,10 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
     const session = event.data.object;
     const userId = session.metadata?.user_id;
 
-    const amountYen = session.amount_total / 100;
-    const ticketPrice = 1280;
-    const quantity = amountYen / ticketPrice;
-    const addedChars = Math.floor(quantity * 10000);
+    // ✅ 枚数取得（adjustable_quantityで選択された）
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+    const quantity = lineItems.data?.[0]?.quantity || 1;
+    const addedChars = quantity * 10000;
 
     if (userId) {
       const { data, error } = await supabase
@@ -71,24 +71,26 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
       if (upsertError) {
         console.error('❌ daily_usage upsert error:', upsertError.message);
       } else {
-        console.log(`✅ Stripe決済成功！${userId} に ${addedChars}文字を追加（合計 ${newLimit}）`);
+        console.log(`✅ Stripe決済成功：${userId} に ${addedChars}文字追加`);
 
-        const thankYouMessage = "ほんとに買ってくれたの？嬉しい！また話しかけてね。";
+        // 🎉 感謝メッセージ送信
+        const thankYouMessage = "チケット買ってくれてありがとう。またお話してね。";
+        let displayName = "あなた";
         try {
-          let displayName = "あなた";
-          try {
-            const profile = await lineClient.getProfile(userId);
-            displayName = profile.displayName;
-          } catch {}
+          const profile = await lineClient.getProfile(userId);
+          displayName = profile.displayName;
+        } catch (e) {
+          console.warn("名前取得失敗:", e.message);
+        }
 
+        try {
           const { url: voiceUrl, duration } = await generateVoice(thankYouMessage, displayName);
           await lineClient.pushMessage(userId, [
             { type: 'text', text: thankYouMessage },
             { type: 'audio', originalContentUrl: voiceUrl, duration },
           ]);
-          console.log(`✅ 感謝メッセージ送信完了 to ${userId}`);
         } catch (e) {
-          console.error('❌ 感謝メッセージ送信エラー:', e.message);
+          console.error('❌ 感謝メッセージ送信失敗:', e.message);
         }
       }
     }
@@ -96,6 +98,7 @@ app.post('/stripe-webhook', bodyParser.raw({ type: 'application/json' }), async 
 
   res.status(200).send('OK');
 });
+
 
 app.use(express.json());
 
